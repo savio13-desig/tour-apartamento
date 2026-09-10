@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tour do Apartamento</title>
+
+<!--
+  ============================================================================
+  TOUR INTERATIVO  —  a rolagem da página controla o "caminhar" pelo imóvel.
+  Pasta autônoma: mantenha  index.html  +  /frames  +  poster.webp  juntos.
+
+  >>> AJUSTES RÁPIDOS (procure por "CONFIG" no <script> lá embaixo):
+      WHATSAPP  -> número do cliente com DDI+DDD, só dígitos. Ex.: "5579998887766"
+      WA_TEXT   -> mensagem que já vai preenchida na conversa
+      CHAPTERS  -> nomes / textos dos ambientes (confira contra o imóvel real)
+  ============================================================================
+-->
+
+<meta name="description" content="Percorra o apartamento no seu ritmo — tour guiado ambiente por ambiente.">
+<meta property="og:title" content="Tour do Apartamento">
+<meta property="og:description" content="Role a página e caminhe pelos ambientes no seu ritmo.">
+<!-- Para preview em link (WhatsApp/redes) troque por URL absoluta após publicar: -->
+<meta property="og:image" content="poster.webp">
+<meta property="og:type" content="website">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --paper:#F5F2EC;
+    --ink:#1B1A17;
+    --ink-soft:#5C554A;
+    --line:#D9D0BF;
+    --wood:#9B6A45;
+    --teal:#3D5B58;
+    --serif:"Fraunces", Georgia, "Times New Roman", serif;
+    --sans:"Archivo", "Helvetica Neue", Arial, sans-serif;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{background:var(--ink)}
+  body{
+    font-family:var(--sans);
+    color:var(--ink);
+    background:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* the scroll runway — this is what the wheel/finger actually moves through */
+  #track{height:680vh}
+
+  /* fixed stage */
+  #stage{position:fixed;inset:0;overflow:hidden;background:var(--ink)}
+  #frame{position:absolute;inset:0;width:100%;height:100%;display:block}
+  #stage::after{ /* editorial scrim: darker toward lower-left where the text sits */
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background:
+      linear-gradient(to top, rgba(15,14,12,.72) 0%, rgba(15,14,12,.28) 24%, rgba(15,14,12,0) 46%),
+      linear-gradient(to right, rgba(15,14,12,.34) 0%, rgba(15,14,12,0) 34%);
+  }
+
+  /* top hairline progress — the "film" metaphor */
+  #bar{position:fixed;top:0;left:0;height:2px;width:0%;background:var(--wood);z-index:40;transition:width .12s linear}
+
+  /* persistent masthead */
+  .mast{position:fixed;top:22px;left:26px;z-index:30;color:var(--paper);
+    font:600 12px/1 var(--sans);letter-spacing:.28em;text-transform:uppercase;
+    display:flex;align-items:center;gap:12px;mix-blend-mode:difference}
+  .mast::after{content:"";width:46px;height:1px;background:currentColor;opacity:.6}
+
+  /* ---- room caption (bottom-left) ---- */
+  .caption{position:fixed;left:clamp(22px,5vw,64px);bottom:clamp(26px,7vh,64px);z-index:30;
+    color:var(--paper);max-width:min(90vw,36ch);
+    transition:opacity .5s ease,transform .5s ease}
+  .caption .idx{font:300 clamp(2.6rem,9vw,5.2rem)/.9 var(--serif);letter-spacing:-.01em;display:flex;align-items:baseline;gap:.5rem}
+  .caption .idx b{font-weight:400}
+  .caption .idx span{font:600 12px/1 var(--sans);letter-spacing:.2em;opacity:.7}
+  .caption .name{margin-top:.5rem;font:400 clamp(1.7rem,5.4vw,3rem)/1.04 var(--serif)}
+  .caption .desc{margin-top:.7rem;font:400 clamp(.9rem,2.4vw,1.02rem)/1.5 var(--sans);color:#EFE9DE}
+  .caption.swap{opacity:0;transform:translateY(10px)}
+
+  /* ---- vertical scrubber (desktop) ---- */
+  .rail{position:fixed;right:clamp(20px,3.2vw,44px);top:50%;transform:translateY(-50%);
+    z-index:30;display:flex;flex-direction:column;gap:5px;width:172px;align-items:stretch}
+  .rail .seg{position:relative;display:flex;align-items:center;gap:12px;background:none;border:0;
+    cursor:pointer;padding:0;color:var(--paper);text-align:right;font-family:var(--sans)}
+  .rail .seg .tick{flex:1;height:3px;background:rgba(245,242,236,.32);position:relative;overflow:hidden;border-radius:2px}
+  .rail .seg .tick i{position:absolute;inset:0;width:0%;background:var(--paper);border-radius:2px}
+  .rail .seg .lbl{order:-1;flex:0 0 auto;font-size:11px;letter-spacing:.04em;opacity:.55;
+    white-space:nowrap;transition:opacity .25s ease;font-weight:500}
+  .rail .seg[aria-current="true"] .lbl{opacity:1}
+  .rail .seg[aria-current="true"] .tick{background:rgba(245,242,236,.5)}
+  .rail .seg[aria-current="true"] .tick i{background:var(--wood)}
+  .rail .seg:hover .lbl{opacity:.9}
+  .rail::before{content:"AMBIENTES";writing-mode:vertical-rl;position:absolute;right:-18px;top:50%;
+    transform:translateY(-50%);font:600 10px/1 var(--sans);letter-spacing:.3em;color:var(--paper);opacity:.4}
+
+  /* ---- intro ---- */
+  .intro{position:fixed;inset:0;z-index:35;display:flex;flex-direction:column;justify-content:center;
+    padding:0 clamp(22px,7vw,110px);color:var(--paper);transition:opacity .6s ease;
+    background:linear-gradient(105deg, rgba(12,11,10,.66) 0%, rgba(12,11,10,.30) 46%, rgba(12,11,10,.05) 78%)}
+  .intro .ey{font:600 12px/1 var(--sans);letter-spacing:.34em;text-transform:uppercase;opacity:.8}
+  .intro h1{margin:.7rem 0 0;font:300 clamp(2.4rem,7vw,5rem)/1.02 var(--serif);max-width:16ch;letter-spacing:-.015em}
+  .intro p{margin-top:1.3rem;font:400 clamp(.95rem,2.6vw,1.1rem)/1.6 var(--sans);max-width:44ch;color:#ECE6DA}
+  .cue{margin-top:2.4rem;display:flex;align-items:center;gap:12px;font:600 11px/1 var(--sans);
+    letter-spacing:.24em;text-transform:uppercase;opacity:.85}
+  .cue svg{width:14px;height:22px;animation:bob 1.8s ease-in-out infinite}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(7px)}}
+
+  /* ---- outro / CTA ---- */
+  .outro{position:fixed;inset:0;z-index:36;display:flex;flex-direction:column;justify-content:center;
+    padding:0 clamp(22px,7vw,110px);color:var(--paper);opacity:0;pointer-events:none;transition:opacity .5s ease;
+    background:linear-gradient(105deg, rgba(12,11,10,.82) 0%, rgba(12,11,10,.52) 52%, rgba(12,11,10,.28) 100%)}
+  .outro.on{opacity:1;pointer-events:auto}
+  .outro .ey{font:600 12px/1 var(--sans);letter-spacing:.34em;text-transform:uppercase;opacity:.75}
+  .outro h2{margin:.6rem 0 0;font:300 clamp(2.4rem,7vw,4.4rem)/1 var(--serif);letter-spacing:-.015em}
+  .outro p{margin-top:1.1rem;font:400 clamp(.95rem,2.6vw,1.08rem)/1.6 var(--sans);max-width:40ch;color:#ECE6DA}
+  .wa{margin-top:1.9rem;display:inline-flex;align-items:center;gap:12px;align-self:flex-start;
+    background:var(--wood);color:#fff;text-decoration:none;padding:15px 26px;border-radius:2px;
+    font:600 12px/1 var(--sans);letter-spacing:.18em;text-transform:uppercase;
+    transition:transform .18s ease,background .18s ease}
+  .wa:hover{transform:translateY(-2px);background:#89532f}
+  .wa svg{width:17px;height:17px;fill:currentColor}
+  .fine{margin-top:1.6rem;font:400 11px/1.5 var(--sans);opacity:.68;max-width:38ch}
+
+  /* ---- loader ---- */
+  .load{position:fixed;inset:0;z-index:60;background:var(--ink);display:flex;
+    align-items:center;justify-content:center;transition:opacity .6s ease}
+  .load.done{opacity:0;pointer-events:none}
+  .load .lw{color:var(--paper);text-align:center;font-family:var(--sans)}
+  .load .lw b{display:block;font:300 1.4rem/1 var(--serif);letter-spacing:.02em}
+  .load .lw i{display:block;margin-top:.9rem;font-size:11px;letter-spacing:.28em;text-transform:uppercase;opacity:.6}
+  .load .lb{margin:16px auto 0;width:160px;height:2px;background:rgba(245,242,236,.2)}
+  .load .lb i{display:block;height:100%;width:0%;background:var(--wood);transition:width .2s linear}
+
+  /* ---- mobile chrome ---- */
+  .mtop{position:fixed;top:0;left:0;right:0;z-index:32;display:none;
+    padding:14px 16px calc(12px);align-items:center;justify-content:space-between;
+    color:var(--paper);background:linear-gradient(to bottom,rgba(15,14,12,.55),transparent)}
+  .mtop .now{font:400 15px/1 var(--serif)}
+  .mtop button{background:none;border:1px solid rgba(245,242,236,.5);color:var(--paper);
+    font:600 10px/1 var(--sans);letter-spacing:.18em;text-transform:uppercase;padding:8px 12px;border-radius:2px}
+  .sheet{position:fixed;inset:0;z-index:50;background:rgba(15,14,12,.92);display:flex;flex-direction:column;
+    justify-content:center;padding:32px;gap:2px;opacity:0;pointer-events:none;transition:opacity .3s ease}
+  .sheet.on{opacity:1;pointer-events:auto}
+  .sheet button{background:none;border:0;color:var(--paper);text-align:left;
+    font:400 1.35rem/1.7 var(--serif);display:flex;gap:14px;align-items:baseline}
+  .sheet button span{font:600 11px/1 var(--sans);letter-spacing:.16em;opacity:.5;min-width:2ch}
+  .sheet button[aria-current="true"]{color:var(--wood)}
+  .sheet .x{position:absolute;top:20px;right:20px;font-size:12px;letter-spacing:.2em}
+
+  @media (max-width:860px){
+    .rail{display:none}
+    .mtop{display:flex}
+    .mast{display:none}
+    .caption{bottom:clamp(20px,9vh,54px)}
+    .intro{padding-top:64px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .cue svg{animation:none}
+    *{transition-duration:.001s !important}
+  }
+</style>
+</head>
+<body>
+
+<div id="track" aria-hidden="true"></div>
+
+<div id="stage">
+  <canvas id="frame" role="img" aria-label="Tour em vídeo do apartamento; a rolagem da página avança pelos ambientes."></canvas>
+</div>
+
+<div id="bar"></div>
+<div class="mast">Tour</div>
+
+<!-- mobile top bar -->
+<div class="mtop">
+  <span class="now" id="mNow">Sala &amp; Jantar</span>
+  <button id="mBtn" aria-haspopup="true">Ambientes</button>
+</div>
+
+<!-- desktop scrubber (filled by JS) -->
+<nav class="rail" id="rail" aria-label="Ambientes do imóvel"></nav>
+
+<!-- intro -->
+<section class="intro" id="intro">
+  <span class="ey">Tour guiado</span>
+  <h1>Percorra o apartamento no seu ritmo.</h1>
+  <p>Role a página para caminhar pelos ambientes. Escolha um cômodo na régua ao lado para ir direto até ele.</p>
+  <div class="cue">
+    Role para começar
+    <svg viewBox="0 0 14 22" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 1v18M1 13l6 6 6-6"/></svg>
+  </div>
+</section>
+
+<!-- outro -->
+<section class="outro" id="outro" aria-hidden="true">
+  <span class="ey">Fim do percurso</span>
+  <h2>Veja pessoalmente.</h2>
+  <p>Agende uma visita sem compromisso e conheça o imóvel de perto.</p>
+  <a class="wa" id="waLink" href="#" target="_blank" rel="noopener">
+    <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15l-1.3 4.7 4.8-1.3A10 10 0 1 0 12 2Zm5.8 14.2c-.2.7-1.4 1.3-2 1.4-.5.1-1.2.2-3.8-.8-3.2-1.3-5.2-4.6-5.4-4.8-.2-.2-1.3-1.7-1.3-3.3 0-1.5.8-2.3 1.1-2.6.3-.3.6-.4.8-.4h.6c.2 0 .5 0 .7.5.2.6.8 2 .9 2.1.1.2.1.3 0 .5-.1.2-.2.4-.3.5l-.5.5c-.2.2-.3.3-.2.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.2.5.1.6 0l1-1.1c.2-.3.4-.2.7-.1.3.1 1.9.9 2.2 1 .3.2.5.2.6.4.1.1.1.7-.1 1.3Z"/></svg>
+    Falar no WhatsApp
+  </a>
+  <p class="fine">Imagens do imóvel real, sem edição. A disposição dos ambientes pode variar conforme a unidade.</p>
+</section>
+
+<!-- mobile chapter sheet -->
+<div class="sheet" id="sheet" role="dialog" aria-label="Lista de ambientes">
+  <button class="x" id="sheetX" aria-label="Fechar">Fechar ✕</button>
+  <div id="sheetList"></div>
+</div>
+
+<!-- loader -->
+<div class="load" id="load">
+  <div class="lw">
+    <b>Preparando o tour</b>
+    <div class="lb"><i id="lbFill"></i></div>
+    <i id="lbTxt">carregando</i>
+  </div>
+</div>
+
+<noscript>
+  <div style="position:fixed;inset:0;background:#1B1A17;color:#F5F2EC;display:flex;align-items:center;
+    justify-content:center;text-align:center;padding:32px;font-family:Georgia,serif;font-size:18px;line-height:1.6">
+    Este tour precisa de JavaScript ativado no navegador.
+  </div>
+</noscript>
+
+<script>
+/* ========================= CONFIG ========================= */
+const WHATSAPP = "55XXXXXXXXXXX";           // <<< número do cliente (DDI+DDD+número, só dígitos)
+const WA_TEXT  = "Olá! Vi o tour do apartamento e quero agendar uma visita.";
+
+const FRAME_COUNT = 344;
+const FRAME_PATH  = n => "frames/f_" + String(n).padStart(4,"0") + ".webp";
+
+/* ambientes: startFrame = primeiro frame do trecho (1..FRAME_COUNT). CONFIRA os nomes. */
+const CHAPTERS = [
+  { start:1,   name:"Sala & Jantar",   desc:"Estar e jantar integrados, abertos para a varanda." },
+  { start:33,  name:"Varanda",         desc:"Varanda na frente do apartamento, com vista aberta e fechamento em vidro." },
+  { start:56,  name:"Cozinha",         desc:"Marcenaria planejada até o teto e bancada ampla." },
+  { start:85,  name:"Área de serviço", desc:"Lavanderia independente, com tanque e ventilação natural." },
+  { start:128, name:"Escritório",      desc:"Quarto reversível — no vídeo, montado como home office." },
+  { start:162, name:"Banheiro social", desc:"Box em vidro e acabamento em porcelanato." },
+  { start:188, name:"Dormitório",      desc:"Dormitório amplo, com janela para o mesmo lado da vista." },
+  { start:225, name:"Suíte",           desc:"Suíte com banheiro privativo e espaço para armário." },
+  { start:312, name:"Suíte principal", desc:"Cama de casal, espelheira e guarda-roupa embutido." },
+];
+/* ========================================================= */
+
+const N = FRAME_COUNT, LAST = N - 1;
+const INTRO = 0.10, OUTRO = 0.90;
+
+const cv = document.getElementById("frame");
+const ctx = cv.getContext("2d", { alpha:false });
+const bar = document.getElementById("bar");
+const introEl = document.getElementById("intro");
+const outroEl = document.getElementById("outro");
+const capWrapId = "cap";
+const railEl = document.getElementById("rail");
+const mNow = document.getElementById("mNow");
+const loadEl = document.getElementById("load");
+const lbFill = document.getElementById("lbFill");
+const lbTxt = document.getElementById("lbTxt");
+
+/* WhatsApp link */
+document.getElementById("waLink").href =
+  "https://wa.me/" + WHATSAPP + "?text=" + encodeURIComponent(WA_TEXT);
+
+/* ---------- caption element ---------- */
+const cap = document.createElement("div");
+cap.className = "caption";
+cap.id = capWrapId;
+cap.innerHTML = '<div class="idx"><b id="cIdx">01</b><span id="cTot">/ 09</span></div>' +
+                '<div class="name" id="cName"></div><div class="desc" id="cDesc"></div>';
+document.getElementById("stage").appendChild(cap);
+const cIdx = document.getElementById("cIdx");
+const cName = document.getElementById("cName");
+const cDesc = document.getElementById("cDesc");
+document.getElementById("cTot").textContent = "/ " + String(CHAPTERS.length).padStart(2,"0");
+
+/* ---------- fracs + rail ---------- */
+CHAPTERS.forEach((c,i)=>{
+  c.frac = (c.start - 1) / LAST;
+  c.end  = (i < CHAPTERS.length-1) ? (CHAPTERS[i+1].start - 1) / LAST : 1;
+  c.weight = c.end - c.frac;
+});
+
+const sheetList = document.getElementById("sheetList");
+CHAPTERS.forEach((c,i)=>{
+  const b = document.createElement("button");
+  b.className = "seg";
+  b.style.flexGrow = c.weight;
+  b.innerHTML = '<span class="lbl">'+c.name+'</span><span class="tick"><i></i></span>';
+  b.addEventListener("click",()=>goToChapter(i));
+  railEl.appendChild(b);
+  c.segEl = b; c.fillEl = b.querySelector("i");
+
+  const s = document.createElement("button");
+  s.innerHTML = '<span>'+String(i+1).padStart(2,"0")+'</span>'+c.name;
+  s.addEventListener("click",()=>{ goToChapter(i); closeSheet(); });
+  sheetList.appendChild(s);
+  c.sheetEl = s;
+});
+/* give rail vertical proportions */
+railEl.style.height = "62vh";
+
+/* ---------- sizing ---------- */
+let vw=0, vh=0, dpr=1;
+function resize(){
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  vw = cv.clientWidth; vh = cv.clientHeight;
+  cv.width = Math.round(vw * dpr);
+  cv.height = Math.round(vh * dpr);
+  draw(curIdx, true);
+}
+window.addEventListener("resize", resize, { passive:true });
+window.addEventListener("orientationchange", resize, { passive:true });
+
+/* ---------- frame store ---------- */
+const imgs = new Array(N);
+const ready = new Array(N).fill(false);
+let loadedCount = 0, revealed = false;
+
+const poster = new Image();
+poster.onload = ()=>{ if(!revealed) drawImg(poster); };
+poster.src = "poster.webp";
+
+function loadFrame(i){
+  const im = new Image();
+  im.decoding = "async";
+  im.onload = ()=>{
+    ready[i] = true; imgs[i] = im; loadedCount++;
+    const pct = Math.round(loadedCount / N * 100);
+    lbFill.style.width = pct + "%";
+    lbTxt.textContent = "carregando " + pct + "%";
+    if(!revealed && (ready[0] && loadedCount >= Math.min(20, N))) reveal();
+    if(loadedCount === N){ lbTxt.textContent = "pronto"; }
+  };
+  im.onerror = ()=>{ loadedCount++; };
+  im.src = FRAME_PATH(i+1);
+}
+/* prioritise the first frames, then the rest */
+(function queue(){
+  let i = 0;
+  const step = ()=>{
+    const burst = revealed ? 12 : 6;
+    for(let k=0;k<burst && i<N;k++,i++) loadFrame(i);
+    if(i<N) setTimeout(step, revealed ? 0 : 40);
+  };
+  step();
+})();
+
+function reveal(){
+  revealed = true;
+  loadEl.classList.add("done");
+  setTimeout(()=>loadEl.remove(), 700);
+  resize();
+  onScroll();
+}
+
+/* ---------- drawing ---------- */
+function drawImg(img){
+  if(!img || !img.width) return;
+  const cw=cv.width, ch=cv.height;
+  const ir=img.width/img.height, cr=cw/ch;
+  let dw,dh,dx,dy;
+  if(ir>cr){ dh=ch; dw=ch*ir; dx=(cw-dw)/2; dy=0; }
+  else { dw=cw; dh=cw/ir; dx=0; dy=(ch-dh)/2; }
+  ctx.drawImage(img,dx,dy,dw,dh);
+}
+function nearestReady(i){
+  if(ready[i]) return i;
+  for(let r=1;r<N;r++){
+    if(i-r>=0 && ready[i-r]) return i-r;
+    if(i+r<N && ready[i+r]) return i+r;
+  }
+  return -1;
+}
+let curIdx = -1, drawnIdx = -1;
+function draw(i, force){
+  if(i===drawnIdx && !force) return;
+  const j = nearestReady(i);
+  if(j>=0){ drawImg(imgs[j]); drawnIdx = i; }
+}
+
+/* ---------- scroll → state ---------- */
+let curChapter = -1;
+function maxScroll(){ return Math.max(document.documentElement.scrollHeight - window.innerHeight, 1); }
+
+function render(){
+  const p = Math.min(Math.max(window.scrollY / maxScroll(), 0), 1);
+  const walk = Math.min(Math.max((p - INTRO) / (OUTRO - INTRO), 0), 1);
+  curIdx = Math.round(walk * LAST);
+  draw(curIdx);
+
+  bar.style.width = (p*100) + "%";
+
+  const introOp = 1 - Math.min(Math.max((p - 0.015) / (INTRO - 0.015), 0), 1);
+  introEl.style.opacity = introOp;
+  introEl.style.pointerEvents = introOp < 0.05 ? "none" : "auto";
+
+  const outOn = p > OUTRO + 0.005;
+  outroEl.classList.toggle("on", outOn);
+  outroEl.setAttribute("aria-hidden", outOn ? "false" : "true");
+  cap.style.opacity = (introOp > 0.5 || outOn) ? 0 : 1;
+  document.querySelector(".mtop").style.opacity = (outOn || introOp > 0.5) ? 0 : 1;
+
+  /* active chapter */
+  let ci = 0;
+  for(let k=0;k<CHAPTERS.length;k++) if(walk >= CHAPTERS[k].frac - 0.004) ci = k;
+  for(let k=0;k<CHAPTERS.length;k++){
+    const c = CHAPTERS[k];
+    const span = Math.max(c.end - c.frac, 1e-6);
+    const local = Math.min(Math.max((walk - c.frac)/span, 0), 1);
+    c.fillEl.style.width = (k < ci ? 100 : k === ci ? local*100 : 0) + "%";
+    const on = k === ci;
+    c.segEl.setAttribute("aria-current", on ? "true" : "false");
+    c.sheetEl.setAttribute("aria-current", on ? "true" : "false");
+  }
+  if(ci !== curChapter){
+    curChapter = ci;
+    const c = CHAPTERS[ci];
+    cap.classList.add("swap");
+    clearTimeout(render._t);
+    render._t = setTimeout(()=>{
+      cIdx.textContent = String(ci+1).padStart(2,"0");
+      cName.textContent = c.name;
+      cDesc.textContent = c.desc;
+      mNow.textContent = c.name;
+      cap.classList.remove("swap");
+    }, 150);
+  }
+}
+function onScroll(){ render(); }
+window.addEventListener("scroll", onScroll, { passive:true });
+
+/* ---------- chapter nav ---------- */
+function goToChapter(i){
+  const target = INTRO + CHAPTERS[i].frac * (OUTRO - INTRO);
+  const y = Math.round(target * maxScroll()) + 6;
+  const reduce = window.matchMedia("(prefers-reduced-motion:reduce)").matches;
+  window.scrollTo({ top:y, behavior: reduce ? "auto" : "smooth" });
+}
+
+/* ---------- mobile sheet ---------- */
+const sheet = document.getElementById("sheet");
+document.getElementById("mBtn").addEventListener("click",()=>sheet.classList.add("on"));
+document.getElementById("sheetX").addEventListener("click",closeSheet);
+sheet.addEventListener("click",e=>{ if(e.target===sheet) closeSheet(); });
+function closeSheet(){ sheet.classList.remove("on"); }
+
+/* ---------- init ---------- */
+resize();
+cName.textContent = CHAPTERS[0].name;
+cDesc.textContent = CHAPTERS[0].desc;
+onScroll();
+</script>
+</body>
+</html>
