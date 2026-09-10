@@ -50,7 +50,7 @@
   }
 
   /* the scroll runway — this is what the wheel/finger actually moves through */
-  #track{height:680vh}
+  #track{height:1000vh}
 
   /* fixed stage */
   #stage{position:fixed;inset:0;overflow:hidden;background:var(--ink)}
@@ -235,20 +235,20 @@
 const WHATSAPP = "5511988387006";           // <<< número do cliente (DDI+DDD+número, só dígitos)
 const WA_TEXT  = "Olá! Vi o tour do apartamento e quero agendar uma visita.";
 
-const FRAME_COUNT = 244;
+const FRAME_COUNT = 513;
 const FRAME_PATH  = n => "frames/f_" + String(n).padStart(4,"0") + ".webp";
 
 /* ambientes: startFrame = primeiro frame do trecho (1..FRAME_COUNT). CONFIRA os nomes. */
 const CHAPTERS = [
   { start:1,   name:"Varanda",           desc:"Frente total para o mar, com guarda-corpo de vidro e churrasqueira." },
-  { start:62,  name:"Sala",              desc:"Living amplo, com painel ripado e iluminação em sanca." },
-  { start:86,  name:"Cozinha",           desc:"Granito preto, marcenaria planejada e cooktop." },
-  { start:110, name:"Dormitório",        desc:"Quarto com janela ampla e espaço para armário." },
-  { start:154, name:"Banheiro social",   desc:"Bancada em granito e box em vidro." },
-  { start:182, name:"Suíte",             desc:"Painel ripado na cabeceira e armário embutido." },
-  { start:200, name:"Closet",            desc:"Marcenaria planejada e espelho de corpo inteiro." },
-  { start:216, name:"Suíte 02",          desc:"Segunda suíte, com armários e duas janelas." },
-  { start:231, name:"Banheiro da suíte", desc:"Bancada com nicho e boa iluminação natural." },
+  { start:130, name:"Sala",              desc:"Living amplo, com painel ripado e iluminação em sanca." },
+  { start:184, name:"Cozinha",           desc:"Granito preto, marcenaria planejada e cooktop." },
+  { start:235, name:"Dormitório",        desc:"Quarto com janela ampla e espaço para armário." },
+  { start:328, name:"Banheiro social",   desc:"Bancada em granito e box em vidro." },
+  { start:385, name:"Suíte",             desc:"Painel ripado na cabeceira e armário embutido." },
+  { start:418, name:"Closet",            desc:"Marcenaria planejada e espelho de corpo inteiro." },
+  { start:454, name:"Suíte 02",          desc:"Segunda suíte, com armários e duas janelas." },
+  { start:487, name:"Banheiro da suíte", desc:"Bancada com nicho e boa iluminação natural." },
 ];
 /* ========================================================= */
 
