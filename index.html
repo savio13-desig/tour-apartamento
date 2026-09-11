@@ -8,7 +8,13 @@
 <!--
   ============================================================================
   TOUR INTERATIVO  —  a rolagem da página controla o "caminhar" pelo imóvel.
-  Pasta autônoma: mantenha  index.html  +  /frames  +  poster.webp  juntos.
+  Pasta autônoma: mantenha  index.html + /sheets + /icons + poster.webp +
+  manifest.webmanifest + sw.js  juntos.
+
+  Os 513 quadros vêm empacotados em 43 "folhas" (sprite sheets) de 4x3, em dois
+  níveis — sm_* para celular (468px) e sd_* para desktop (712px) — cada um em
+  AVIF com WebP de reserva. O nível é escolhido pela largura da tela; dá para
+  forçar com ?tier=d ou ?tier=m.
 
   >>> AJUSTES RÁPIDOS (procure por "CONFIG" no <script> lá embaixo):
       WHATSAPP  -> número do cliente com DDI+DDD, só dígitos. Ex.: "5579998887766"
@@ -23,6 +29,13 @@
 <!-- Para preview em link (WhatsApp/redes) troque por URL absoluta após publicar: -->
 <meta property="og:image" content="poster.webp">
 <meta property="og:type" content="website">
+
+<!-- PWA: instalável e abre offline depois da primeira visita -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#12110F">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -236,7 +249,15 @@ const WHATSAPP = "5511988387006";           // <<< número do cliente (DDI+DDD+n
 const WA_TEXT  = "Olá! Vi o tour do apartamento e quero agendar uma visita.";
 
 const FRAME_COUNT = 513;
-const FRAME_PATH  = n => "frames/f_" + String(n).padStart(4,"0") + ".webp";
+
+/* Os quadros vêm empacotados em "folhas" (sprite sheets) de 4x3.
+   Antes eram 513 arquivos soltos; agora são 43 folhas — menos requisições e,
+   em AVIF, bem menos bytes. Dois níveis: "m" (celular) e "d" (desktop). */
+const SHEET = { cols:4, rows:3, per:12 };
+const TIERS = {
+  m: { w:468, h:832,  prefix:"sm" },
+  d: { w:712, h:1266, prefix:"sd" },
+};
 
 /* ambientes: startFrame = primeiro frame do trecho (1..FRAME_COUNT). CONFIRA os nomes. */
 const CHAPTERS = [
@@ -321,38 +342,69 @@ function resize(){
 window.addEventListener("resize", resize, { passive:true });
 window.addEventListener("orientationchange", resize, { passive:true });
 
-/* ---------- frame store ---------- */
-const imgs = new Array(N);
-const ready = new Array(N).fill(false);
-let loadedCount = 0, revealed = false;
+/* ---------- sheet store ---------- */
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+const qTier = new URLSearchParams(location.search).get("tier");
+let   TIER  = TIERS[qTier] || (innerWidth < 820 ? TIERS.m : TIERS.d);
+const NSHEETS = Math.ceil(N / SHEET.per);
+
+const sheets  = new Array(NSHEETS);
+const sready  = new Array(NSHEETS).fill(false);
+const sasked  = new Array(NSHEETS).fill(false);
+let loadedSheets = 0, revealed = false, noAvif = false;
+
+const url = (s, ext) => `sheets/${TIER.prefix}_${String(s).padStart(3,"0")}.${ext}`;
 
 const poster = new Image();
 poster.onload = ()=>{ if(!revealed) drawImg(poster); };
 poster.src = "poster.webp";
 
-function loadFrame(i){
-  const im = new Image();
-  im.decoding = "async";
-  im.onload = ()=>{
-    ready[i] = true; imgs[i] = im; loadedCount++;
-    const pct = Math.round(loadedCount / N * 100);
-    lbFill.style.width = pct + "%";
-    lbTxt.textContent = "carregando " + pct + "%";
-    if(!revealed && (ready[0] && loadedCount >= Math.min(20, N))) reveal();
-    if(loadedCount === N){ lbTxt.textContent = "pronto"; }
-  };
-  im.onerror = ()=>{ loadedCount++; };
-  im.src = FRAME_PATH(i+1);
+function sheetDone(s, im){
+  sheets[s] = im; sready[s] = true; loadedSheets++;
+  const pct = Math.round(loadedSheets / NSHEETS * 100);
+  lbFill.style.width = pct + "%";
+  lbTxt.textContent = "carregando " + pct + "%";
+  if(!revealed && sready[0]) reveal();
+  if(drawnIdx >= 0 && Math.floor(drawnIdx / SHEET.per) === s) draw(curIdx, true);
 }
-/* prioritise the first frames, then the rest */
+
+/* Carrega AVIF; se o navegador não suportar, cai para WebP (e marca a flag
+   para os próximos não tentarem de novo). */
+function loadSheet(s){
+  if(sasked[s]) return;
+  sasked[s] = true;
+  const tryExt = (ext, onFail)=>{
+    const im = new Image();
+    im.decoding = "async";
+    im.onload  = ()=> sheetDone(s, im);
+    im.onerror = onFail;
+    im.src = url(s, ext);
+  };
+  if(noAvif) tryExt("webp", ()=>{ loadedSheets++; });
+  else tryExt("avif", ()=>{
+    noAvif = true;
+    // navegador sem AVIF: usa a reserva em WebP, que só existe no nível leve
+    if(loadedSheets === 0) TIER = TIERS.m;
+    tryExt("webp", ()=>{ loadedSheets++; });
+  });
+}
+
+/* prioridade: a folha do quadro atual e a seguinte; o resto entra em fila */
+function ensureNear(idx){
+  const s = Math.floor(idx / SHEET.per);
+  loadSheet(s);
+  if(s + 1 < NSHEETS) loadSheet(s + 1);
+  if(s - 1 >= 0)      loadSheet(s - 1);
+}
 (function queue(){
+  loadSheet(0); loadSheet(1);
   let i = 0;
   const step = ()=>{
-    const burst = revealed ? 12 : 6;
-    for(let k=0;k<burst && i<N;k++,i++) loadFrame(i);
-    if(i<N) setTimeout(step, revealed ? 0 : 40);
+    let n = revealed ? 3 : 1;
+    while(n > 0 && i < NSHEETS){ if(!sasked[i]) { loadSheet(i); n--; } i++; }
+    if(i < NSHEETS) setTimeout(step, revealed ? 120 : 400);
   };
-  step();
+  setTimeout(step, 300);
 })();
 
 function reveal(){
@@ -373,19 +425,38 @@ function drawImg(img){
   else { dw=cw; dh=cw/ir; dx=0; dy=(ch-dh)/2; }
   ctx.drawImage(img,dx,dy,dw,dh);
 }
-function nearestReady(i){
-  if(ready[i]) return i;
-  for(let r=1;r<N;r++){
-    if(i-r>=0 && ready[i-r]) return i-r;
-    if(i+r<N && ready[i+r]) return i+r;
+/* recorta o quadro dentro da folha e desenha em "cover" no canvas */
+function drawCell(im, cell){
+  const fw = TIER.w, fh = TIER.h;
+  const sx = (cell % SHEET.cols) * fw;
+  const sy = Math.floor(cell / SHEET.cols) * fh;
+  const cw = cv.width, ch = cv.height;
+  const ir = fw/fh, cr = cw/ch;
+  let dw,dh,dx,dy;
+  if(ir>cr){ dh=ch; dw=ch*ir; dx=(cw-dw)/2; dy=0; }
+  else { dw=cw; dh=cw/ir; dx=0; dy=(ch-dh)/2; }
+  ctx.drawImage(im, sx, sy, fw, fh, dx, dy, dw, dh);
+}
+/* se a folha do quadro pedido ainda não chegou, mostra a folha carregada mais
+   próxima — o tour continua navegável enquanto o resto baixa */
+function nearestSheet(s){
+  if(sready[s]) return s;
+  for(let r=1;r<NSHEETS;r++){
+    if(s-r >= 0      && sready[s-r]) return s-r;
+    if(s+r < NSHEETS && sready[s+r]) return s+r;
   }
   return -1;
 }
 let curIdx = -1, drawnIdx = -1;
 function draw(i, force){
   if(i===drawnIdx && !force) return;
-  const j = nearestReady(i);
-  if(j>=0){ drawImg(imgs[j]); drawnIdx = i; }
+  const want = Math.floor(i / SHEET.per);
+  const s = nearestSheet(want);
+  if(s < 0) return;
+  const cell = (s === want) ? (i % SHEET.per)
+                            : clamp(i - s*SHEET.per, 0, SHEET.per-1);
+  drawCell(sheets[s], cell);
+  drawnIdx = i;
 }
 
 /* ---------- scroll → state ---------- */
@@ -396,6 +467,7 @@ function render(){
   const p = Math.min(Math.max(window.scrollY / maxScroll(), 0), 1);
   const walk = Math.min(Math.max((p - INTRO) / (OUTRO - INTRO), 0), 1);
   curIdx = Math.round(walk * LAST);
+  ensureNear(curIdx);          // prioriza a folha do trecho em que o visitante está
   draw(curIdx);
 
   bar.style.width = (p*100) + "%";
@@ -459,6 +531,11 @@ resize();
 cName.textContent = CHAPTERS[0].name;
 cDesc.textContent = CHAPTERS[0].desc;
 onScroll();
+
+/* ---------- PWA ---------- */
+if("serviceWorker" in navigator){
+  addEventListener("load", ()=> navigator.serviceWorker.register("sw.js").catch(()=>{}));
+}
 </script>
 </body>
 </html>

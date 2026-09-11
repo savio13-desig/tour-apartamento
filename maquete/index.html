@@ -21,6 +21,13 @@
 <meta property="og:description" content="Ande pelo apartamento inteiro em 3D, direto no navegador.">
 <meta property="og:type" content="website">
 
+<!-- PWA: instalável e abre offline depois da primeira visita -->
+<link rel="manifest" href="../manifest.webmanifest">
+<meta name="theme-color" content="#12110F">
+<link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=Fraunces:opsz,wght@9..144,300;9..144,400&display=swap" rel="stylesheet">
@@ -330,8 +337,10 @@ const solids = [];      // {x1,z1,x2,z2} colisão (paredes cheias no nível do c
 const boxes  = [];      // {x0,z0,x1,z1} colisão de móveis
 
 function setupScene(){
-  renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:"high-performance" });
-  renderer.setPixelRatio(Math.min(devicePixelRatio||1, 2));
+  // em celular: sem antialias e pixel ratio limitado — é onde mais se ganha fps
+  const coarse = matchMedia("(pointer:coarse)").matches;
+  renderer = new THREE.WebGLRenderer({ antialias: !coarse, powerPreference:"high-performance" });
+  renderer.setPixelRatio(Math.min(devicePixelRatio||1, coarse ? 1.5 : 2));
   renderer.setSize(innerWidth, innerHeight);
   renderer.outputEncoding = THREE.sRGBEncoding;
   $("#app").appendChild(renderer.domElement);
@@ -343,30 +352,24 @@ function setupScene(){
   camera = new THREE.PerspectiveCamera(72, innerWidth/innerHeight, 0.06, 400);
   clock = new THREE.Clock();
 
-  scene.add(new THREE.AmbientLight(0xE6EDF4, 0.30));
-  scene.add(new THREE.HemisphereLight(0xEDF4FB, 0x9C948A, 0.60));
-  const sun = new THREE.DirectionalLight(0xFFF1DE, 0.46);
+  /* Iluminação enxuta: 3 luzes no total.
+     Antes eram 15 (11 point lights) — em GPU de celular cada luz multiplica o
+     custo do shader. A luz "de ambiente" agora vem do ambiente+hemisfério, que
+     custa quase nada e mantém todos os cômodos legíveis. */
+  scene.add(new THREE.AmbientLight(0xF0F2F6, 0.62));
+  scene.add(new THREE.HemisphereLight(0xF4F8FC, 0x8E877C, 0.58));
+  const sun = new THREE.DirectionalLight(0xFFF1DE, 0.40);
   sun.position.set(-6, 14, -18);
   scene.add(sun);
-  const bounce = new THREE.DirectionalLight(0xCBD8E6, 0.16);
-  bounce.position.set(8, 6, 20);
-  scene.add(bounce);
-  // plafons: uma luz quente por ambiente, para nenhum cômodo ficar apagado
-  const LAMPS = [
-    [3.0, 4.6, .42], [3.0, 2.9, .30],        // sala
-    [8.6, 3.6, .40], [8.6, 4.9, .26],        // cozinha
-    [8.6, 7.2, .40],                         // dormitório
-    [4.9, 8.6, .34],                         // circulação
-    [1.8, 8.8, .40],                         // suíte
-    [1.8, 11.3,.30],                         // closet
-    [4.9, 11.2,.34],                         // banheiro social
-    [7.6, 10.6,.40],                         // suíte 02
-    [10.0,10.6,.30],                         // banheiro da suíte
-  ];
-  for(const [x,z,i] of LAMPS){
-    const l = new THREE.PointLight(0xFFE9CE, i, 9.5, 2);
-    l.position.set(x, 2.42, z); scene.add(l);
-  }
+}
+
+/* Escala o UV na própria geometria em vez de clonar a textura.
+   Assim todas as paredes compartilham UMA textura (antes eram 63 cópias). */
+function scaleUV(geom, sx, sy){
+  const uv = geom.attributes.uv;
+  for(let i=0;i<uv.count;i++) uv.setXY(i, uv.getX(i)*sx, uv.getY(i)*sy);
+  uv.needsUpdate = true;
+  return geom;
 }
 
 const box = (w,h,d, mat, x,y,z, rotY=0) => {
@@ -391,9 +394,8 @@ function buildWalls(){
     const put = (a, b, y0, y1) => {
       if(b-a < 0.01 || y1-y0 < 0.01) return;
       const cx = ax + ux*(a+b)/2, cz = az + uz*(a+b)/2;
-      const m = new THREE.Mesh(new THREE.BoxGeometry(b-a, y1-y0, WALL), mat.clone());
-      if(m.material.map){ m.material.map = m.material.map.clone();
-        m.material.map.repeat.set((b-a)/1.4, (y1-y0)/1.4); m.material.map.needsUpdate = true; }
+      const g = scaleUV(new THREE.BoxGeometry(b-a, y1-y0, WALL), (b-a)/1.4, (y1-y0)/1.4);
+      const m = new THREE.Mesh(g, mat);          // material compartilhado
       m.position.set(cx, (y0+y1)/2, cz);
       m.rotation.y = ang;
       scene.add(m);
@@ -439,9 +441,8 @@ function seg(ax,az,ux,uz,a,b){
 function buildShell(){
   for(const r of ROOMS){
     const w = r.x1-r.x0, d = r.z1-r.z0;
-    const mat = (r.floor==="mosaico" ? M.mosaico : M.piso).clone();
-    mat.map = mat.map.clone(); mat.map.repeat.set(w/1.2, d/1.2); mat.map.needsUpdate = true;
-    const f = new THREE.Mesh(new THREE.PlaneGeometry(w,d), mat);
+    const mat = (r.floor==="mosaico" ? M.mosaico : M.piso);   // compartilhado
+    const f = new THREE.Mesh(scaleUV(new THREE.PlaneGeometry(w,d), w/1.2, d/1.2), mat);
     f.rotation.x = -Math.PI/2;
     f.position.set(r.x0+w/2, 0, r.z0+d/2);
     scene.add(f);
@@ -476,9 +477,7 @@ function buildFixtures(){
   addBoxCollider(9.75, 1.38, 10.95, 1.98);
 
   /* ---- SALA: painel ripado + bancada suspensa + sofá ---- */
-  const rip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2.45, 3.4), M.ripado.clone());
-  rip.material.map = rip.material.map.clone(); rip.material.map.repeat.set(3.4/1.2, 2.45/1.2);
-  rip.material.map.needsUpdate = true;
+  const rip = new THREE.Mesh(scaleUV(new THREE.BoxGeometry(0.06, 2.45, 3.4), 3.4/1.2, 2.45/1.2), M.ripado);
   rip.position.set(0.10, 1.28, 4.6); scene.add(rip);
   box(0.10, 0.90, 1.60, M.marcEscura, 0.16, 1.02, 4.2);      // TV
   box(0.42, 0.07, 2.60, M.marcEscura, 0.31, 0.42, 4.9);      // bancada suspensa
@@ -502,9 +501,7 @@ function buildFixtures(){
   box(4.3, 0.72, 0.36, M.marcClara, 8.75, 1.92, 2.32);
   box(0.36, 0.72, 2.6, M.marcClara, 10.76, 1.92, 4.0);
   // torre / coluna ripada junto à passagem
-  const col = new THREE.Mesh(new THREE.BoxGeometry(0.62, 2.40, 0.70), M.ripado.clone());
-  col.material.map = col.material.map.clone(); col.material.map.repeat.set(0.7/1.2, 2.4/1.2);
-  col.material.map.needsUpdate = true;
+  const col = new THREE.Mesh(scaleUV(new THREE.BoxGeometry(0.62, 2.40, 0.70), 0.7/1.2, 2.4/1.2), M.ripado);
   col.position.set(6.55, 1.20, 5.15); scene.add(col);
   addBoxCollider(6.24, 4.8, 6.86, 5.5);
   // península / bar em granito
@@ -519,9 +516,7 @@ function buildFixtures(){
   addBoxCollider(6.25, 5.8, 6.85, 8.0);
 
   /* ---- SUÍTE: cabeceira ripada + cama + armário ---- */
-  const rip2 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2.40, 2.6), M.ripado.clone());
-  rip2.material.map = rip2.material.map.clone(); rip2.material.map.repeat.set(2.6/1.2, 2.4/1.2);
-  rip2.material.map.needsUpdate = true;
+  const rip2 = new THREE.Mesh(scaleUV(new THREE.BoxGeometry(0.06, 2.40, 2.6), 2.6/1.2, 2.4/1.2), M.ripado);
   rip2.position.set(0.10, 1.25, 8.7); scene.add(rip2);
   bed(1.35, 8.7, Math.PI/2);
   box(0.58, 2.30, 2.0, M.marcEscura, 3.30, 1.15, 7.9);
@@ -831,6 +826,11 @@ $("#enter").onclick = ()=>{
   $("#intro").classList.add("hide");
   if(!touch) renderer.domElement.requestPointerLock?.();
 };
+/* ---------- PWA ---------- */
+if("serviceWorker" in navigator){
+  addEventListener("load", ()=> navigator.serviceWorker.register("../sw.js").catch(()=>{}));
+}
+
 try{ boot(); }
 catch(e){
   console.error(e);
