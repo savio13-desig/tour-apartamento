@@ -4,16 +4,13 @@
    - folhas de quadros e CDN         : cache-first sob demanda
    Para publicar uma versão nova, troque VERSION.
    ========================================================================== */
-const VERSION = "v1";
+const VERSION = "v2";
 const SHELL   = `shell-${VERSION}`;
 const ASSETS  = `assets-${VERSION}`;
 
 const SHELL_FILES = [
   "./",
   "./index.html",
-  "./maquete/",
-  "./maquete/index.html",
-  "./poster.webp",
   "./manifest.webmanifest",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
@@ -38,7 +35,6 @@ self.addEventListener("activate", e => {
 });
 
 const isAsset = (url) =>
-  url.pathname.includes("/sheets/") ||
   url.pathname.includes("/icons/")  ||
   url.hostname === "cdnjs.cloudflare.com" ||
   url.hostname === "fonts.googleapis.com" ||
