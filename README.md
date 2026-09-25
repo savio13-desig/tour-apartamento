@@ -50,14 +50,40 @@ Eixos: **X cresce para leste, Z cresce para o sul**; o mar fica a oeste
 
 ## Desempenho
 
-3 luzes + mapa de ambiente (IBL), 11 texturas procedurais, ~2.800 triangulos,
-~110 draw calls no pior angulo, 6 programas de shader. No celular o pixel ratio
-e limitado a 1,4 com antialias desligado. A pagina inteira tem ~55 KB (fora o
-Three.js, que vem da CDN e fica em cache).
+**31 draw calls** e ~3.100 triangulos no apartamento inteiro, 13 texturas
+procedurais, 7 programas de shader. A pagina tem ~55 KB (fora o Three.js, que
+vem da CDN e fica em cache). No celular o pixel ratio e limitado a 1,25 com
+antialias desligado.
 
-O aspecto de render vem do `MeshStandardMaterial` com mapa de ambiente gerado
-de um ceu procedural — nao ha nenhuma luz extra, nem sombra calculada. As
-sombras sob os moveis sao manchas de contato (um plano com gradiente) e a
-sanca de LED e um mapa emissivo no teto: custo proximo de zero.
+Tres decisoes seguram esse numero:
+
+- **Fusao por material.** Nada na cena se mexe depois de montada, entao no fim
+  da construcao (`fundirPorMaterial`) todas as malhas que dividem o mesmo
+  material viram uma malha so. Sao ~250 objetos que viram 30. O UV de cada
+  peca ja foi assado na geometria pelo `scaleUV`, e cada teto mantem seu
+  proprio 0..1, entao a sanca continua desenhando certo em cada comodo.
+- **Fora do apartamento quase nao ha geometria.** O ceu e um gradiente posto
+  direto em `scene.background` (um quad de tela, zero malhas) e sobraram
+  apenas dois planos, mar e chao, com `MeshBasicMaterial` — nao entram em
+  conta de iluminacao. A versao anterior tinha domo de ceu, faixa de areia,
+  46 quadras e 4 torres: nada disso aparecia por mais de dois segundos e
+  tudo custava a cada quadro.
+- **Iluminacao sem sombra calculada.** O aspecto de render vem do
+  `MeshStandardMaterial` com mapa de ambiente gerado de um ceu procedural
+  (IBL) mais tres luzes. As sombras sob os moveis sao manchas de contato (um
+  plano com gradiente) e a sanca de LED e um mapa emissivo no teto.
+
+## Colisao
+
+Raio do jogador 0,24 m. As paredes entram como segmentos e os moveis como
+caixas. A ponta de cada segmento e tratada como calota de raio `R + WALL/2`,
+o que fazia o canto do vao estufar para dentro da porta e prender quem
+passava fora do eixo — por isso cada trecho cheio de parede e recuado meia
+espessura em toda ponta que encosta num vao. As portas internas tem 0,92 m.
+
+Ha um teste de caminhada automatica no historico das sessoes: ele percorre
+todos os ambientes em linha reta entre pontos e acusa onde trava. Foi ele
+que revelou que a mesa de jantar fechava a passagem entre cozinha e estar e
+que o armario da suite ficava em frente a propria porta.
 
 Para publicar versao nova dos arquivos em cache, troque `VERSION` no `sw.js`.

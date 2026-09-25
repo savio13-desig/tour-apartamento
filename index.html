@@ -241,7 +241,7 @@ const WALLS = [
   { a:[1.99,2.12], b:[3.48,2.12], h:H, openings:[] },
   { a:[1.99,3.86], b:[3.48,3.86], h:H, openings:[] },
   { a:[3.48,2.12], b:[3.48,3.86], h:H, openings:[
-      { a:0.42, b:1.24, y0:0, y1:2.12, kind:"door" },
+      { a:0.38, b:1.30, y0:0, y1:2.12, kind:"door" },
   ]},
 
   /* sala <-> setor íntimo */
@@ -251,20 +251,20 @@ const WALLS = [
 
   /* dormitório <-> circulação */
   { a:[3.95,6.47], b:[3.95,9.98], h:H, openings:[
-      { a:0.34, b:1.16, y0:0, y1:2.12, kind:"door" },
+      { a:0.30, b:1.22, y0:0, y1:2.12, kind:"door" },
   ]},
 
   /* dormitório <-> suíte (a porta da suíte fica na ponta, pela circulação) */
   { a:[0.98,9.98], b:[4.94,9.98], h:H, openings:[
-      { a:3.06, b:3.88, y0:0, y1:2.12, kind:"door" },
+      { a:3.02, b:3.94, y0:0, y1:2.12, kind:"door" },
   ]},
 
   /* bloco dos banheiros */
   { a:[4.94,7.66],  b:[6.25,7.66],  h:H, openings:[] },
   { a:[4.94,11.47], b:[6.25,11.47], h:H, openings:[] },
   { a:[4.94,7.66],  b:[4.94,13.79], h:H, openings:[
-      { a:0.16, b:0.98, y0:0, y1:2.12, kind:"door" },         // banho social
-      { a:3.98, b:4.80, y0:0, y1:2.12, kind:"door" },         // banho da suíte
+      { a:0.14, b:1.06, y0:0, y1:2.12, kind:"door" },         // banho social
+      { a:3.94, b:4.86, y0:0, y1:2.12, kind:"door" },         // banho da suíte
   ]},
 ];
 
@@ -290,7 +290,7 @@ function tex(c){
 function texPorcelanato(){
   const [c,x] = cvs(256,256);
   x.fillStyle="#E4DFD6"; x.fillRect(0,0,256,256);
-  for(let i=0;i<7;i++){                             // veios discretos
+  for(let i=0;i<5;i++){                             // veios discretos
     x.strokeStyle=`rgba(196,189,178,${.10+Math.random()*.14})`;
     x.lineWidth=1+Math.random()*3; x.beginPath();
     let px=Math.random()*256, py=-10;
@@ -298,7 +298,7 @@ function texPorcelanato(){
     while(py<266){ px += (Math.random()-0.5)*46; py += 22; x.lineTo(px,py); }
     x.stroke();
   }
-  for(let i=0;i<1400;i++){ const g=214+Math.random()*24;
+  for(let i=0;i<500;i++){ const g=214+Math.random()*24;
     x.fillStyle=`rgba(${g},${g-3},${g-9},.22)`; x.fillRect(Math.random()*256,Math.random()*256,2,2); }
   x.strokeStyle="rgba(176,169,158,.55)"; x.lineWidth=2; x.strokeRect(0,0,256,256);
   return c;
@@ -307,7 +307,7 @@ function texPorcelanato(){
 function texTerraco(){
   const [c,x] = cvs(256,256);
   x.fillStyle="#CFCAC1"; x.fillRect(0,0,256,256);
-  for(let i=0;i<1800;i++){ const g=196+Math.random()*30;
+  for(let i=0;i<600;i++){ const g=196+Math.random()*30;
     x.fillStyle=`rgba(${g},${g-2},${g-8},.30)`; x.fillRect(Math.random()*256,Math.random()*256,2,2); }
   x.strokeStyle="rgba(150,144,134,.65)"; x.lineWidth=3; x.strokeRect(0,0,256,256);
   return c;
@@ -316,7 +316,7 @@ function texTerraco(){
 function texMadeira(){
   const [c,x] = cvs(256,256);
   x.fillStyle="#C39A6B"; x.fillRect(0,0,256,256);
-  for(let i=0;i<260;i++){
+  for(let i=0;i<130;i++){
     const y=Math.random()*256, a=.05+Math.random()*.14;
     x.strokeStyle = Math.random()>.5 ? `rgba(150,110,68,${a})` : `rgba(224,196,160,${a})`;
     x.lineWidth = .6+Math.random()*2.2;
@@ -336,18 +336,18 @@ function texRipado(){
     x.fillRect(i,0,12,256);
     x.fillStyle="rgba(54,36,20,.8)"; x.fillRect(i+12,0,4,256);
   }
-  for(let i=0;i<900;i++){ x.fillStyle=`rgba(96,66,38,${Math.random()*.12})`;
+  for(let i=0;i<280;i++){ x.fillStyle=`rgba(96,66,38,${Math.random()*.12})`;
     x.fillRect(Math.random()*256, Math.random()*256, 1, 6+Math.random()*20); }
   return c;
 }
 /* granito preto das bancadas (cozinha e banheiros das fotos) */
 function texGranito(){
-  const [c,x] = cvs(256,256);
-  x.fillStyle="#1B1A19"; x.fillRect(0,0,256,256);
-  for(let i=0;i<5200;i++){
+  const [c,x] = cvs(192,192);
+  x.fillStyle="#1B1A19"; x.fillRect(0,0,192,192);
+  for(let i=0;i<1600;i++){
     const g=Math.random(); const v = g>0.94 ? 196 : (g>0.72 ? 104 : 52);
     x.fillStyle=`rgba(${v},${v},${v-4},${.22+Math.random()*.5})`;
-    x.fillRect(Math.random()*256,Math.random()*256,1+Math.random()*2,1+Math.random()*2);
+    x.fillRect(Math.random()*192,Math.random()*192,1+Math.random()*2,1+Math.random()*2);
   }
   return c;
 }
@@ -365,10 +365,10 @@ function texTijolinho(){
   return c;
 }
 function texReboco(tint){
-  const [c,x] = cvs(128,128);
-  x.fillStyle=tint; x.fillRect(0,0,128,128);
-  for(let i=0;i<1600;i++){ x.fillStyle=`rgba(0,0,0,${Math.random()*.04})`;
-    x.fillRect(Math.random()*128,Math.random()*128,2,2); }
+  const [c,x] = cvs(96,96);
+  x.fillStyle=tint; x.fillRect(0,0,96,96);
+  for(let i=0;i<420;i++){ x.fillStyle=`rgba(0,0,0,${Math.random()*.04})`;
+    x.fillRect(Math.random()*96,Math.random()*96,2,2); }
   return c;
 }
 /* sanca: mapa emissivo do teto. O LED de borda aparece de graça, sem nenhuma
@@ -391,17 +391,17 @@ function texSombra(){
 }
 /* céu — serve para o domo e para a iluminação de ambiente (IBL) */
 function texCeu(){
-  const [c,x] = cvs(512,256);
+  const [c,x] = cvs(256,128);
   const g = x.createLinearGradient(0,0,0,256);
   g.addColorStop(0.00,"#3F7CB4"); g.addColorStop(0.36,"#8FBEDF");
   g.addColorStop(0.49,"#DCE8EC"); g.addColorStop(0.51,"#93A3AA");
   g.addColorStop(1.00,"#585B58");
-  x.fillStyle=g; x.fillRect(0,0,512,256);
-  const s = x.createRadialGradient(118,78,0,118,78,88);
+  x.fillStyle=g; x.fillRect(0,0,256,128);
+  const s = x.createRadialGradient(59,39,0,59,39,44);
   s.addColorStop(0,"rgba(255,248,230,1)"); s.addColorStop(1,"rgba(255,248,230,0)");
-  x.fillStyle=s; x.fillRect(0,0,260,200);
-  for(let i=0;i<26;i++){                             // nuvens leves
-    const cx=Math.random()*512, cy=28+Math.random()*70, r=14+Math.random()*34;
+  x.fillStyle=s; x.fillRect(0,0,130,100);
+  for(let i=0;i<12;i++){                             // nuvens leves
+    const cx=Math.random()*256, cy=14+Math.random()*35, r=7+Math.random()*17;
     const n = x.createRadialGradient(cx,cy,0,cx,cy,r);
     n.addColorStop(0,"rgba(255,255,255,.5)"); n.addColorStop(1,"rgba(255,255,255,0)");
     x.fillStyle=n; x.fillRect(cx-r,cy-r,r*2,r*2);
@@ -467,7 +467,7 @@ function setupScene(){
   // celular: sem antialias e pixel ratio contido — é onde mais se ganha fps
   const coarse = matchMedia("(pointer:coarse)").matches;
   renderer = new THREE.WebGLRenderer({ antialias: !coarse, powerPreference:"high-performance" });
-  renderer.setPixelRatio(Math.min(devicePixelRatio||1, coarse ? 1.4 : 2));
+  renderer.setPixelRatio(Math.min(devicePixelRatio||1, coarse ? 1.25 : 1.75));
   renderer.setSize(innerWidth, innerHeight);
   renderer.outputEncoding  = THREE.sRGBEncoding;
   renderer.toneMapping     = THREE.ACESFilmicToneMapping;
@@ -475,7 +475,7 @@ function setupScene(){
   $("#app").appendChild(renderer.domElement);
 
   scene  = new THREE.Scene();
-  scene.fog = new THREE.Fog(0xB6CEDD, 140, 1100);
+  scene.fog = new THREE.Fog(0xC0D5E2, 220, 900);
   camera = new THREE.PerspectiveCamera(68, innerWidth/innerHeight, 0.06, 600);
   clock  = new THREE.Clock();
 }
@@ -594,10 +594,24 @@ function buildWalls(){
     }
     put(cur, len, 0, w.h);
 
-    // colisão dos trechos cheios
+    /* Colisão dos trechos cheios. A ponta de cada segmento é tratada como
+       calota de raio R + WALL/2, o que fazia o canto do vão "estufar" para
+       dentro da porta e prender quem passava fora do eixo. Recuando o
+       segmento meia espessura de parede em cada ponta que encosta num vão,
+       a porta fica com a largura que aparenta ter. */
+    const meia = WALL/2;
     let c2 = 0;
-    for(const o of ops){ if(o.a>c2) solids.push(seg(ax,az,ux,uz,c2,o.a)); c2 = o.b; }
-    if(c2 < len) solids.push(seg(ax,az,ux,uz,c2,len));
+    for(const o of ops){
+      if(o.a > c2){
+        const a0 = c2 === 0 ? 0 : c2 + meia, b0 = o.a - meia;
+        if(b0 > a0) solids.push(seg(ax,az,ux,uz,a0,b0));
+      }
+      c2 = o.b;
+    }
+    if(c2 < len){
+      const a0 = c2 === 0 ? 0 : c2 + meia;
+      if(len > a0) solids.push(seg(ax,az,ux,uz,a0,len));
+    }
   }
 }
 
@@ -841,44 +855,69 @@ function banho(z0, z1, fundo){
   box(0.06, 0.24, 0.06, M.inox,    5.60, 1.92, z1-0.30);          // chuveiro
 }
 
-/* --------------------------- exterior / vista --------------------------- */
+/* ------------------------------- a vista -------------------------------
+   O foco é o apartamento. Lá fora sobraram só três coisas: o gradiente de
+   céu (vai direto no background, sem geometria nenhuma), o mar e o chão.
+   As duas usam MeshBasicMaterial — não entram em conta de iluminação.
+   Antes havia domo de céu, faixa de areia, 46 quadras e 4 torres; nada
+   disso aparecia mais do que dois segundos e tudo custava a cada quadro. */
 function buildExterior(){
-  // domo de céu: um único draw call, fora do fog
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(420, 24, 16),
-    new THREE.MeshBasicMaterial({ map:T.ceu, side:THREE.BackSide, fog:false }));
-  scene.add(sky);
+  const ceu = T.ceu.clone();
+  ceu.mapping = THREE.EquirectangularReflectionMapping;
+  scene.background = ceu;
 
-  const Y = -22.5;                                   // altura do térreo (andar alto)
-  // mar a oeste
-  const sea = new THREE.Mesh(new THREE.PlaneGeometry(760, 520),
-    new THREE.MeshStandardMaterial({ color:0x1F5A7C, roughness:.24, metalness:.15 }));
-  sea.rotation.x = -Math.PI/2; sea.position.set(-290, Y, 6); scene.add(sea);
-  // faixa de areia
-  const sand = new THREE.Mesh(new THREE.PlaneGeometry(60, 520),
-    new THREE.MeshStandardMaterial({ color:0xD9CDB2, roughness:.95 }));
-  sand.rotation.x = -Math.PI/2; sand.position.set(-58, Y+0.05, 6); scene.add(sand);
-  // quadras baixas entre o prédio e a praia — uma InstancedMesh só
-  const im = new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),
-    new THREE.MeshStandardMaterial({ color:0xBCB6AC, roughness:.92 }), 46);
-  const m = new THREE.Matrix4();
-  let seed = 7;
-  const rnd = () => (seed = (seed*16807) % 2147483647) / 2147483647;
-  for(let i=0;i<46;i++){
-    const w = 6+rnd()*8, d = 7+rnd()*8, h = 5+rnd()*9;
-    const x = -46 + rnd()*18;
-    const z = -150 + i*7.2 + rnd()*3;
-    m.makeScale(w,h,d);
-    m.setPosition(x, Y + h/2, z);
-    im.setMatrixAt(i, m);
+  const Y = -22.5;                                   // altura do térreo
+  const mar = new THREE.Mesh(new THREE.PlaneGeometry(900, 700),
+    new THREE.MeshBasicMaterial({ color:0x4E86A6 }));
+  mar.rotation.x = -Math.PI/2; mar.position.set(-476, Y, 7); scene.add(mar);
+
+  const chao = new THREE.Mesh(new THREE.PlaneGeometry(70, 260),
+    new THREE.MeshBasicMaterial({ color:0xD2C7AE }));
+  chao.rotation.x = -Math.PI/2; chao.position.set(9, Y, 7); scene.add(chao);
+}
+
+/* ---------------------------- fusão por material ------------------------
+   Nada aqui se move depois de montado, então no fim da construção todas as
+   malhas que dividem o mesmo material viram UMA malha só. Cai de ~120 draw
+   calls para pouco mais de uma dezena, sem mudar um pixel: o UV de cada
+   caixa já foi assado na geometria pelo scaleUV, e cada teto continua com
+   seu próprio 0..1, então a sanca segue desenhando certo em cada cômodo.
+   InstancedMesh (montantes do guarda-corpo e cadeiras) fica de fora. */
+function fundirPorMaterial(){
+  const alvos = scene.children.filter(o => o.isMesh && !o.isInstancedMesh);
+  const grupos = new Map();
+  for(const m of alvos){
+    m.updateMatrix();
+    const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+    g.applyMatrix4(m.matrix);
+    let grupo = grupos.get(m.material);
+    if(!grupo) grupos.set(m.material, grupo = { geos:[], ordem:0 });
+    grupo.geos.push(g);
+    grupo.ordem = Math.max(grupo.ordem, m.renderOrder);
   }
-  scene.add(im);
-  // torres vizinhas
-  const tw = new THREE.MeshStandardMaterial({ color:0xC4BEB5, roughness:.88 });
-  for(const [x,z,h] of [[14,-34,36],[18,52,32],[-24,-52,28],[30,18,30]])
-    box(13, h, 13, tw, x, Y + h/2, z);
-  // laje do próprio andar, para não se ver o vazio pela varanda
-  box(9.2, 0.5, 15.4, new THREE.MeshStandardMaterial({ color:0xCCC6BC, roughness:.9 }),
-      2.6, -0.32, 6.9);
+  for(const m of alvos) scene.remove(m);
+
+  for(const [mat, grupo] of grupos){
+    let n = 0;
+    for(const g of grupo.geos) n += g.attributes.position.count;
+    const pos = new Float32Array(n*3), nor = new Float32Array(n*3), uv = new Float32Array(n*2);
+    let o = 0;
+    for(const g of grupo.geos){
+      pos.set(g.attributes.position.array, o*3);
+      if(g.attributes.normal) nor.set(g.attributes.normal.array, o*3);
+      if(g.attributes.uv)     uv.set(g.attributes.uv.array,      o*2);
+      o += g.attributes.position.count;
+      g.dispose();
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute("normal",   new THREE.BufferAttribute(nor, 3));
+    geo.setAttribute("uv",       new THREE.BufferAttribute(uv,  2));
+    const malha = new THREE.Mesh(geo, mat);
+    malha.renderOrder = grupo.ordem;
+    malha.frustumCulled = false;
+    scene.add(malha);
+  }
 }
 
 /* ------------------------------- controles ------------------------------ */
@@ -956,7 +995,7 @@ function hideHint(){ $("#hint").classList.add("gone"); }
 const R = 0.24;
 function collide(nx, nz){
   let x = nx, z = nz;
-  for(let iter=0; iter<3; iter++){
+  for(let iter=0; iter<4; iter++){
     let hit = false;
     for(const s of solids){
       const dx = s.x2-s.x1, dz = s.z2-s.z1;
@@ -1110,6 +1149,7 @@ function boot(){
   buildWalls();
   buildFixtures();
   buildExterior();
+  fundirPorMaterial();
   setupControls();
   buildMenu();
   curRoom = roomAt(P.x,P.z);
