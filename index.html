@@ -658,13 +658,13 @@ function buildFixtures(){
   box (0.82, 0.05, 0.60, M.granito, 0.52, 0.88, 0.46);
   addBoxCollider(0.11, 0.16, 0.94, 0.77);
   // mesa redonda + 4 cadeiras
-  const tam = new THREE.Mesh(new THREE.CylinderGeometry(0.44,0.44,0.05,20), M.madeira);
-  tam.position.set(0.95, 0.74, 3.05); scene.add(tam);
-  box(0.09, 0.72, 0.09, M.lacaEsc, 0.95, 0.37, 3.05);
-  box(0.46, 0.04, 0.46, M.lacaEsc, 0.95, 0.04, 3.05);
-  seats([[0.95,2.42],[0.95,3.68],[0.33,3.05],[1.57,3.05]], M.laca, 0.95, 3.05);
-  addBoxCollider(0.46, 2.56, 1.44, 3.54);
-  sombra(0.95, 3.05, 1.5, 1.5);
+  const tam = new THREE.Mesh(new THREE.CylinderGeometry(0.40,0.40,0.05,20), M.madeira);
+  tam.position.set(0.70, 0.74, 3.05); scene.add(tam);
+  box(0.09, 0.72, 0.09, M.lacaEsc, 0.70, 0.37, 3.05);
+  box(0.44, 0.04, 0.44, M.lacaEsc, 0.70, 0.04, 3.05);
+  seats([[0.70,2.44,Math.PI],[0.70,3.66,0],[0.16,3.05,-Math.PI/2]], M.laca);
+  addBoxCollider(0.30, 2.62, 1.14, 3.50);
+  sombra(0.70, 3.05, 1.5, 1.5);
 
   /* ===== COZINHA — bancada sob a janela, torre em L e geladeira =====
      Os armários aéreos ficam só no trecho sem janela; o resto da parede
@@ -680,17 +680,16 @@ function buildFixtures(){
   boxT(1.36, 2.30, 0.40, M.madeira, 2.78, 1.15, 1.92, 1.3);
   box (1.28, 0.03, 0.04, M.laca,    2.78, 1.62, 1.71);
   addBoxCollider(2.08, 1.70, 3.48, 2.14);
-  // geladeira inox no canto nordeste
-  box(0.74, 1.84, 0.68, M.inox, 5.76, 0.92, 0.50);
-  addBoxCollider(5.38, 0.15, 6.14, 0.86);
-  sombra(5.76, 0.50, 1.1, 1.0);
+  perfil(3.10, 3.70, 0.78, 0.76);                                 // puxador da bancada
+  perfil(1.04, 2.66, 1.60, 0.49);                                 // puxador dos aéreos
+  geladeira(5.76, 0.50);                                          // canto nordeste
 
-  /* ===== ÁREA DE SERVIÇO ===== */
-  box(0.60, 0.88, 0.52, M.laca,   2.40, 0.44, 2.52);              // tanque
-  box(0.64, 0.05, 0.56, M.inox,   2.40, 0.90, 2.52);
-  box(0.62, 0.84, 0.60, M.branco, 2.42, 0.42, 3.40);              // máquina
-  box(0.34, 0.34, 0.03, M.lacaEsc,2.42, 0.56, 3.09);
-  addBoxCollider(2.08, 2.24, 2.76, 3.74);
+  /* ===== ÁREA DE SERVIÇO — tudo na parede oeste, passagem livre ===== */
+  box(0.50, 0.88, 0.50, M.laca,   2.33, 0.44, 2.52);              // tanque
+  box(0.54, 0.05, 0.54, M.inox,   2.33, 0.90, 2.52);
+  box(0.56, 0.84, 0.56, M.branco, 2.35, 0.42, 3.38);              // máquina
+  box(0.30, 0.30, 0.03, M.lacaEsc,2.35, 0.56, 3.09);
+  addBoxCollider(2.06, 2.26, 2.66, 3.68);
 
   /* ===== SALA — painel ripado com TV, sofá, tapete e jantar ===== */
   /* o painel fica na FACE SUL da parede da área de serviço (z 3.93),
@@ -706,17 +705,20 @@ function buildFixtures(){
   box(0.20, 0.34, 0.86, M.tecidoEsc, 3.82, 0.56, 5.88);
   addBoxCollider(1.86, 5.42, 3.88, 6.36);
   sombra(2.86, 5.90, 2.5, 1.5);
-  box(1.52, 0.012, 1.26, M.tapete,  2.80, 0.008, 4.92);           // tapete
-  box(0.66, 0.05, 0.66, M.madeira,  2.80, 0.36, 4.92);            // mesa de centro
-  box(0.10, 0.34, 0.10, M.lacaEsc,  2.80, 0.17, 4.92);
-  addBoxCollider(2.44, 4.56, 3.16, 5.28);
-  // jantar para 6, integrado à cozinha
-  box(1.58, 0.05, 0.88, M.madeira, 4.95, 0.74, 3.10);
-  for(const sx of [-0.68, 0.68]) for(const sz of [-0.34, 0.34])
-    box(0.07, 0.72, 0.07, M.lacaEsc, 4.95+sx, 0.37, 3.10+sz);
-  seats([[4.52,2.52],[4.95,2.52],[5.38,2.52],[4.52,3.68],[4.95,3.68],[5.38,3.68]], M.tecido, 4.95, 3.10);
-  addBoxCollider(4.08, 2.60, 5.82, 3.60);
-  sombra(4.95, 3.10, 2.3, 1.7);
+  /* o estar tem 1,49 m de largura: o tapete e um apoio no canto bastam.
+     Uma mesa de centro no meio fecharia a passagem para a porta do terraco. */
+  box(1.36, 0.012, 1.30, M.tapete,  2.78, 0.008, 4.95);           // tapete
+  box(0.44, 0.40, 0.44, M.madeira,  2.28, 0.20, 4.50);            // apoio lateral
+  addBoxCollider(2.05, 4.27, 2.51, 4.73);
+  /* jantar para 6 encostado na face leste, como na planta — assim sobra
+     1 m de passagem livre entre a cozinha e o estar */
+  box(0.85, 0.05, 1.55, M.madeira, 5.32, 0.74, 3.30);
+  for(const sx of [-0.33, 0.33]) for(const sz of [-0.62, 0.62])
+    box(0.07, 0.72, 0.07, M.lacaEsc, 5.32+sx, 0.37, 3.30+sz);
+  seats([[4.80,2.82,-Math.PI/2],[4.80,3.30,-Math.PI/2],[4.80,3.78,-Math.PI/2],
+         [5.86,2.82, Math.PI/2],[5.86,3.30, Math.PI/2],[5.86,3.78, Math.PI/2]], M.tecido);
+  addBoxCollider(4.58, 2.58, 6.08, 4.02);
+  sombra(5.32, 3.30, 1.9, 2.3);
   // aparador sob a janela leste
   box(0.38, 0.70, 1.30, M.madeira, 5.97, 0.35, 5.20);
   addBoxCollider(5.76, 4.55, 6.16, 5.85);
@@ -729,26 +731,28 @@ function buildFixtures(){
   box(0.52, 0.04, 0.42, M.madeira, 2.43, 0.56, 9.58);             // criado entre as camas
   box(2.44, 2.30, 0.56, M.laca,  2.32, 1.15, 6.86);               // armário ao norte
   box(2.32, 0.03, 0.04, M.verde, 2.32, 1.62, 6.57);
+  perfil(2.30, 2.32, 1.06, 6.59);
   addBoxCollider(1.10, 6.56, 3.54, 7.16);
   box(1.02, 0.05, 0.50, M.madeira, 1.68, 0.74, 7.62);             // escrivaninha
   box(0.06, 0.74, 0.46, M.lacaEsc, 1.20, 0.37, 7.62);
   addBoxCollider(1.16, 7.36, 2.20, 7.88);
 
   /* ===== SUÍTE — cama de casal com cabeceira ripada e armário ===== */
-  boxT(0.06, 2.34, 1.96, M.ripado, 1.16, 1.17, 11.30, 1.2);       // cabeceira
-  bedDouble(2.18, 11.30);
-  box(1.52, 2.30, 0.56, M.laca,  4.06, 1.15, 10.35);              // armário ao norte
-  box(1.44, 0.03, 0.04, M.verde, 4.06, 1.62, 10.07);
-  addBoxCollider(3.28, 10.06, 4.84, 10.64);
-  box(1.10, 0.06, 0.40, M.madeira, 3.90, 0.52, 12.34);            // penteadeira
-  box(0.04, 0.90, 0.60, M.espelho, 3.38, 1.32, 12.30);
-  addBoxCollider(3.34, 12.12, 4.46, 12.54);
-  box(0.42, 0.04, 0.42, M.madeira, 1.42, 0.56, 10.32);            // criados-mudos
-  box(0.42, 0.04, 0.42, M.madeira, 1.42, 0.56, 12.28);
+  boxT(0.06, 2.34, 1.96, M.ripado, 1.16, 1.17, 11.15, 1.2);       // cabeceira
+  bedDouble(2.18, 11.15);
+  box(1.94, 2.30, 0.52, M.laca,  2.30, 1.15, 12.28);              // armário na parede sul
+  box(1.86, 0.03, 0.04, M.verde, 2.30, 1.62, 12.01);
+  perfil(1.84, 2.30, 1.06, 12.00);
+  addBoxCollider(1.31, 12.00, 3.29, 12.56);
+  box(0.72, 0.06, 0.40, M.madeira, 3.66, 0.52, 10.28);            // penteadeira ao norte
+  box(0.66, 0.90, 0.03, M.espelho, 3.66, 1.36, 10.10);
+  addBoxCollider(3.28, 10.06, 4.04, 10.50);
+  box(0.42, 0.04, 0.42, M.madeira, 1.42, 0.56, 10.24);            // criados-mudos
+  box(0.42, 0.04, 0.42, M.madeira, 1.42, 0.56, 12.06);
 
   /* ===== BANHEIROS ===== */
-  banho(5.60, 7.73, 11.40);    // social
-  banho(5.60, 11.54, 13.72);   // da suíte
+  banho(7.73, 11.40, 1.24);    // social — box maior no fundo
+  banho(11.54, 13.72, 0.72);   // da suíte
 
   /* ===== HALL DE ENTRADA — aparador na parede dos banheiros, para deixar
      a porta social livre ===== */
@@ -758,18 +762,18 @@ function buildFixtures(){
   addBoxCollider(5.12, 7.28, 6.04, 7.60);
 }
 
-/* cadeiras em InstancedMesh: assento e encosto, um draw call cada */
-function seats(list, mat, cx, cz){
+/* Cadeiras em InstancedMesh: assento e encosto, um draw call cada.
+   Cada item é [x, z, ang], onde ang aponta para onde vai o encosto. */
+function seats(list, mat){
   const im = new THREE.InstancedMesh(new THREE.BoxGeometry(0.44,0.06,0.44), mat, list.length);
   const ib = new THREE.InstancedMesh(new THREE.BoxGeometry(0.44,0.48,0.06), mat, list.length);
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(),
         p = new THREE.Vector3(), s = new THREE.Vector3(1,1,1),
         up = new THREE.Vector3(0,1,0), off = new THREE.Matrix4();
-  list.forEach((pt,i)=>{
-    const [x,z] = pt;
-    m.makeTranslation(x, 0.45, z); im.setMatrixAt(i, m);
-    const ang = Math.atan2(x-cx, z-cz);           // encosto vira para fora da mesa
+  list.forEach(([x,z,ang],i)=>{
     q.setFromAxisAngle(up, ang);
+    p.set(x, 0.45, z);
+    m.compose(p, q, s); im.setMatrixAt(i, m);
     p.set(x, 0.72, z);
     m.compose(p, q, s);
     off.makeTranslation(0, 0, 0.21);
@@ -779,43 +783,62 @@ function seats(list, mat, cx, cz){
   scene.add(im); scene.add(ib);
 }
 
-function bedSingle(cx, cz){
-  box(0.92, 0.30, 1.92, M.madeira, cx, 0.15, cz);
-  box(0.88, 0.20, 1.88, M.branco,  cx, 0.40, cz);
-  box(0.62, 0.11, 0.36, M.branco,  cx, 0.55, cz+0.74);            // travesseiro (cabeceira ao sul)
-  box(0.86, 0.09, 0.48, M.verde,   cx, 0.53, cz-0.58);            // manta no pé da cama
+/* As camas ganham base, colchao, edredom, travesseiro e manta em camadas —
+   sao poucas caixas a mais e e o que tira o aspecto de bloco branco. */
+function bedSingle(cx, cz){                     // cabeceira ao SUL (cz+)
+  box(0.92, 0.26, 1.92, M.madeira, cx, 0.13, cz);                 // base
+  box(0.88, 0.22, 1.88, M.branco,  cx, 0.37, cz);                 // colchao
+  box(0.92, 0.11, 1.34, M.branco,  cx, 0.53, cz-0.24);            // edredom
+  box(0.94, 0.07, 0.46, M.verde,   cx, 0.56, cz-0.62);            // manta no pe
+  box(0.60, 0.15, 0.34, M.branco,  cx, 0.55, cz+0.72);            // travesseiro
   addBoxCollider(cx-0.48, cz-0.98, cx+0.48, cz+0.98);
   sombra(cx, cz, 1.5, 2.5);
 }
-function bedDouble(cx, cz){
-  box(2.02, 0.30, 1.62, M.madeira,   cx, 0.15, cz);
-  box(1.96, 0.22, 1.56, M.branco,    cx, 0.41, cz);
-  box(0.62, 0.10, 1.50, M.tecidoEsc, cx+0.66, 0.56, cz);
-  for(const s of [-0.40, 0.40]) box(0.34, 0.12, 0.52, M.branco, cx-0.72, 0.56, cz+s);
+function bedDouble(cx, cz){                     // cabeceira a OESTE (cx-)
+  box(2.02, 0.26, 1.62, M.madeira,   cx, 0.13, cz);               // base
+  box(1.96, 0.22, 1.56, M.branco,    cx, 0.37, cz);               // colchao
+  box(1.42, 0.12, 1.60, M.branco,    cx+0.26, 0.54, cz);          // edredom
+  box(0.50, 0.08, 1.60, M.tecidoEsc, cx+0.74, 0.58, cz);          // manta no pe
+  for(const s of [-0.36, 0.36])
+    box(0.36, 0.16, 0.52, M.branco,  cx-0.68, 0.56, cz+s);        // travesseiros
   addBoxCollider(cx-1.03, cz-0.83, cx+1.03, cz+0.83);
   sombra(cx, cz, 2.6, 2.2);
 }
-/* banheiro comprido e estreito, como o das fotos: gabinete, vaso e box */
-function banho(cx, z0, z1){
-  const zGab = z0 + 0.52, zVaso = z0 + 1.34;
-  box(1.06, 0.82, 0.52, M.madeira, cx, 0.41, zGab);
-  box(1.10, 0.05, 0.56, M.granito, cx, 0.86, zGab);
-  const p = new THREE.Mesh(new THREE.CylinderGeometry(0.19,0.16,0.12,18), M.branco);
-  p.position.set(cx, 0.92, zGab); scene.add(p);
-  box(0.06, 0.12, 0.06, M.inox,    cx, 1.02, zGab-0.20);
-  box(0.86, 0.96, 0.03, M.espelho, cx, 1.58, zGab-0.27);
-  box(0.92, 0.03, 0.05, M.inox,    cx, 1.04, zGab-0.26);          // LED sob o espelho
-  addBoxCollider(cx-0.55, zGab-0.28, cx+0.55, zGab+0.28);
-  // vaso
-  box(0.38, 0.40, 0.58, M.branco, cx-0.26, 0.20, zVaso);
-  box(0.36, 0.48, 0.18, M.branco, cx-0.26, 0.44, zVaso-0.26);
-  addBoxCollider(cx-0.48, zVaso-0.36, cx-0.04, zVaso+0.32);
+/* frente de geladeira: junta do freezer e dois puxadores verticais */
+function geladeira(cx, cz){
+  box(0.74, 1.84, 0.68, M.inox,    cx, 0.92, cz);
+  box(0.76, 0.02, 0.70, M.lacaEsc, cx, 1.28, cz);
+  for(const s of [-0.26, 0.26])
+    box(0.03, 0.56, 0.04, M.lacaEsc, cx+s, 1.55 + (s<0?-0.62:0), cz-0.36);
+  addBoxCollider(cx-0.40, cz-0.38, cx+0.40, cz+0.38);
+  sombra(cx, cz, 1.1, 1.0);
+}
+/* puxador perfil embutido — risco escuro que dá leitura de marcenaria */
+function perfil(w, x, y, z, rot=0){ box(w, 0.018, 0.02, M.lacaEsc, x, y, z, rot); }
+/* Banheiro comprido e estreito, como o das fotos: bancada e vaso encostados
+   na parede leste e o box no fundo — a faixa junto à porta fica livre. */
+function banho(z0, z1, fundo){
+  const xg = 5.94;                                  // eixo da marcenaria (parede leste)
+  const zGab = z0 + 0.58, zVaso = z0 + 1.22;
+  box(0.44, 0.82, 1.00, M.madeira, xg, 0.41, zGab);               // gabinete
+  box(0.48, 0.05, 1.04, M.granito, xg, 0.86, zGab);
+  perfil(0.96, xg-0.23, 0.74, zGab, Math.PI/2);
+  const p = new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.15,0.12,18), M.branco);
+  p.position.set(xg, 0.92, zGab); scene.add(p);
+  box(0.06, 0.12, 0.06, M.inox,    xg+0.15, 1.02, zGab);          // torneira
+  box(0.03, 0.92, 0.86, M.espelho, 6.15, 1.58, zGab);             // espelho
+  box(0.04, 0.03, 0.90, M.inox,    6.12, 1.06, zGab);             // LED sob o espelho
+  addBoxCollider(5.70, zGab-0.54, 6.18, zGab+0.54);
+  // vaso encostado na parede
+  box(0.44, 0.40, 0.38, M.branco, 5.87, 0.20, zVaso);
+  box(0.18, 0.48, 0.40, M.branco, 6.08, 0.44, zVaso);
+  addBoxCollider(5.63, zVaso-0.24, 6.18, zVaso+0.24);
   // box de vidro no fundo
-  const zb = z1 - 0.62;
-  const gl = new THREE.Mesh(new THREE.BoxGeometry(1.12, 1.94, 0.02), M.vidro);
-  gl.position.set(cx, 0.97, zb-0.62); scene.add(gl);
-  box(1.10, 0.03, 1.20, M.branco,  cx, 0.015, zb);                // soleira do box
-  box(0.06, 0.24, 0.06, M.inox,    cx, 1.92, zb);                 // chuveiro
+  const zg = z1 - fundo;
+  const gl = new THREE.Mesh(new THREE.BoxGeometry(1.14, 1.94, 0.02), M.vidro);
+  gl.position.set(5.60, 0.97, zg); scene.add(gl);
+  box(1.12, 0.03, fundo, M.branco, 5.60, 0.015, z1-fundo/2);      // soleira do box
+  box(0.06, 0.24, 0.06, M.inox,    5.60, 1.92, z1-0.30);          // chuveiro
 }
 
 /* --------------------------- exterior / vista --------------------------- */
@@ -930,7 +953,7 @@ function setupControls(){
 function hideHint(){ $("#hint").classList.add("gone"); }
 
 /* ------------------------------- colisão -------------------------------- */
-const R = 0.28;
+const R = 0.24;
 function collide(nx, nz){
   let x = nx, z = nz;
   for(let iter=0; iter<3; iter++){
@@ -1015,11 +1038,11 @@ function drawMap(){
 
 /* --------------------------------- menu --------------------------------- */
 const SPOTS = {                       // de onde a câmera entra em cada ambiente
-  terraco:[0.95,4.40,Math.PI/2], cozinha:[4.10,1.62,0],   aservico:[2.72,3.20,0],
-  sala:[4.60,4.90,-Math.PI/2],   hallEntrada:[5.55,7.05,Math.PI],
-  circulacao:[4.46,7.30,0],      dormitorio:[2.50,7.70,0],
-  suite:[3.40,11.30,Math.PI/2],  banhoSocial:[5.58,8.90,Math.PI],
-  banhoSuite:[5.58,12.70,Math.PI],
+  terraco:[0.95,4.40,Math.PI/2], cozinha:[4.10,1.62,0],    aservico:[3.05,3.00,0],
+  sala:[4.10,5.20,-0.30],        hallEntrada:[5.50,6.92,Math.PI],
+  circulacao:[4.46,7.30,0],      dormitorio:[2.50,7.66,0],
+  suite:[3.95,11.40,Math.PI/2],  banhoSocial:[5.30,9.70,Math.PI],
+  banhoSuite:[5.30,12.40,Math.PI],
 };
 function buildMenu(){
   const list = $("#menuList");
