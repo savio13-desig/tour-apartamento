@@ -1,7 +1,7 @@
 {
   "name": "Maquete 3D — Apartamento 77 m²",
   "short_name": "Maquete 3D",
-  "description": "Maquete 3D navegável do apartamento: terraço gourmet, cozinha, sala, dois dormitórios e banheiros, sem cortes.",
+  "description": "Maquete 3D navegável e editável do apartamento: ande pelos ambientes, mude os móveis de lugar e troque os acabamentos.",
   "lang": "pt-BR",
   "start_url": "./",
   "scope": "./",
