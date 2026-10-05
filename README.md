@@ -27,6 +27,22 @@ Na vista de maquete:
   voltar pela aba *Moveis*.
 - **Passear aqui** — toque num ponto do chao para entrar no passeio ali.
 
+**Cada peca tem modelo e cor proprios.** Tocar numa peca (ou *Editar* na aba
+*Moveis*) abre a aba **Item**:
+
+- **Modelo** — por exemplo o sofa em 3 lugares, 2 lugares ou com chaise; a mesa
+  de jantar retangular de 6 ou 4 lugares ou redonda; cama box, com cabeceira
+  estofada ou com pes; criado-mudo com gaveta, aberto ou redondo. Se o modelo
+  novo nao couber ali, a peca procura um respiro de ate 40 cm e, nao achando,
+  volta ao modelo anterior.
+- **Cor de cada parte** — estofado, bracos, almofadas, pes, tampo, cadeiras,
+  roupa de cama, manta... cada uma com a paleta do seu material (tecido,
+  madeira, pintura, metal, pedra). O primeiro botao (*A*) devolve a parte ao
+  padrao do estilo global; so as partes pintadas a mao ficam fixas.
+- **Pecas fixas** (armarios, bancadas, geladeira, painel da TV, cabeceiras,
+  gabinetes dos banheiros) tambem entram: cor editavel, sem arrastar.
+- **Restaurar esta peca** volta modelo e cores ao original.
+
 No painel **Personalizar**:
 
 - **Estilos** — cinco combinacoes prontas (Original, Moderno claro,
@@ -77,9 +93,14 @@ icons/                  icones do app
 - `ROOMS` — cada comodo e um retangulo em metros (`x0,z0,x1,z1`).
 - `WALLS` — paredes como segmentos, com os vaos (portas, janelas, passagens).
 - `BOUNDS` — envelope do apartamento.
-- `buildFixtures()` — o que e `mover(...)` e movel editavel; o resto e
-  marcenaria fixa. Cada `mover` mede a propria caixa e guarda os colisores.
-- `CATALOGO` — pecas que o usuario pode acrescentar.
+- `DEFS` — cada tipo de peca: partes (`slots`, com o tipo de paleta e o
+  material padrao), modelos (`vars`) e os construtores de cada um. Pecas moveis
+  desenham em torno da origem, com as costas para +Z; pecas fixas desenham
+  nas coordenadas do apartamento.
+- `PAL` — paletas por tipo de parte (tecido, pintura, metal, madeira, pedra...).
+- `buildFixtures()` — instancia as pecas (`novoItem`) com posicao e orientacao
+  iniciais (`rot0`); o resto (churrasqueira, vaso, box) e geometria fixa.
+- `CATALOGO` — toda peca movel de `DEFS` pode ser acrescentada pelo usuario.
 - `OPC`, `LUZ`, `ESTILOS` — opcoes de acabamento, periodos do dia e estilos.
 - `WHATSAPP` / `WA_TEXT` — contato do anunciante.
 
@@ -103,6 +124,12 @@ Decisoes que seguram esse numero:
   algo muda (selecionar, soltar, girar, adicionar, remover) e custa ~0,6 ms.
   Durante o arraste, so o movel selecionado e desenhado "vivo", sem refazer
   nada por quadro.
+- **Cor por peca sem custo por quadro.** Cada parte aponta para um "slot"
+  (`SM("estofado")`); o material real so e escolhido ao montar a camada fundida:
+  o padrao e o material global do estilo, e uma cor escolhida a mao vira um
+  material compartilhado por todas as pecas que escolherem a mesma opcao.
+  Estofados usam caixas de cantos arredondados (extrusao com chanfro, ~100
+  triangulos cada). Medido: ~7.000 triangulos e ~40 draw calls no total.
 - **Acabamento sem malha nova.** Cada categoria troca propriedades de UM
   material compartilhado (mapa, cor, rugosidade); como a geometria ja esta
   fundida por material, trocar o piso nao custa nada. As texturas alternativas

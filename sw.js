@@ -4,7 +4,7 @@
    - folhas de quadros e CDN         : cache-first sob demanda
    Para publicar uma versão nova, troque VERSION.
    ========================================================================== */
-const VERSION = "v5";
+const VERSION = "v6";
 const SHELL   = `shell-${VERSION}`;
 const ASSETS  = `assets-${VERSION}`;
 

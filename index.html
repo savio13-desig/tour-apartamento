@@ -181,6 +181,16 @@
   .addgrid button{background:rgba(243,239,231,.04);border:1px solid var(--line);border-radius:6px;cursor:pointer;
     font:500 11px/1.25 var(--sans);padding:12px 6px;min-height:46px}
   .addgrid button:hover,.card:hover{border-color:rgba(243,239,231,.55)}
+
+  .pills{display:flex;flex-wrap:wrap;gap:7px}
+  .pill{background:none;border:1px solid var(--line);border-radius:999px;cursor:pointer;
+    font:500 12px/1 var(--sans);padding:11px 14px;min-height:40px}
+  .pill[aria-pressed=true]{background:var(--wood);border-color:var(--wood);color:#1c1206;font-weight:600}
+  .chip.auto{font:600 11px/1 var(--sans);color:var(--paper);display:grid;place-items:center;
+    background:repeating-linear-gradient(135deg,#2a2825 0 6px,#3a3733 6px 12px)}
+  .row h4.grp,h4.grp{font:600 10px/1 var(--sans);letter-spacing:.18em;text-transform:uppercase;
+    opacity:.62;margin:2px 0 8px}
+  .it{padding-right:4px}
   .note{font:400 11px/1.5 var(--sans);opacity:.55;margin:2px 0 14px}
 
   /* barra de ações do móvel / do ponto tocado */
@@ -189,16 +199,22 @@
     border-radius:10px;padding:5px;max-width:96vw;opacity:0;pointer-events:none;
     transition:opacity .2s,transform .2s}
   .acoes.on{opacity:1;pointer-events:auto;transform:translate(-50%,0)}
-  .acoes b{font:400 1rem/1 var(--serif);padding:0 10px 0 9px;white-space:nowrap;max-width:34vw;
-    overflow:hidden;text-overflow:ellipsis}
-  .acoes button{height:42px;min-width:44px;padding:0 11px;background:none;border:1px solid transparent;
-    border-radius:7px;cursor:pointer;font:600 10px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;
-    display:flex;align-items:center;justify-content:center;gap:6px}
+  .acoes b{font:400 .92rem/1.1 var(--serif);padding:0 6px 0 8px;min-width:58px;max-width:28vw;flex:0 1 auto;
+    overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+    word-break:normal;overflow-wrap:normal}
+  .acoes button{height:42px;min-width:40px;padding:0 8px;background:none;border:1px solid transparent;
+    border-radius:7px;cursor:pointer;font:600 10px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;
+    display:flex;align-items:center;justify-content:center;gap:6px;flex:none}
+  @media (max-width:560px){
+    .acoes{flex-wrap:wrap;justify-content:center;row-gap:0;width:min(96vw,420px)}
+    .acoes b{flex:1 0 100%;max-width:none;display:block;text-align:center;padding:5px 8px 3px;
+      white-space:nowrap;text-overflow:ellipsis;-webkit-line-clamp:unset}
+  }
   .acoes button:hover{border-color:var(--line)}
   .acoes button svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.7;
     stroke-linecap:round;stroke-linejoin:round}
   .acoes button.pri{background:var(--wood);color:#1c1206}
-  .acoes button[data-a^=rot]{font-size:22px;line-height:1;padding:0 8px}
+  .acoes button[data-a^=rot]{font-size:22px;line-height:1;padding:0 6px;min-width:36px}
   .acoes button.bad{color:#f0a090}
   @media (min-width:900px){ body.sheetOn .acoes{left:calc(50% - 194px)} }
   .acoes .sep{width:1px;align-self:stretch;background:var(--line);margin:4px 2px}
@@ -263,6 +279,7 @@
   <div class="tabs" id="tabs" role="tablist">
     <button data-t="est" class="on" role="tab">Estilos</button>
     <button data-t="acab" role="tab">Acabamentos</button>
+    <button data-t="item" role="tab">Item</button>
     <button data-t="mov" role="tab">Móveis</button>
     <button data-t="luz" role="tab">Luz</button>
     <button class="sx" id="sheetX" aria-label="Fechar painel">✕</button>
@@ -857,6 +874,7 @@ function aplicarLuz(id){
   // Com IBL ligado, luz e exposição entram baixas de propósito: o céu já
   // ilumina tudo. Valores calibrados olhando sala, cozinha e quartos.
   for(const m of Object.values(M)) if(m.isMeshStandardMaterial) m.envMapIntensity = L.env;
+  for(const m of Object.values(OV)) m.envMapIntensity = L.env;     // cores individuais dos móveis
   M.teto.emissiveIntensity = L.sanca;
   AMB.color.setHex(L.amb[0]);   AMB.intensity = L.amb[1];
   HEMI.color.setHex(L.hemi[0]); HEMI.groundColor.setHex(L.hemi[1]); HEMI.intensity = L.hemi[2];
@@ -1048,18 +1066,598 @@ function glassRail(x1,z1,x2,z2){
 }
 
 /* --------------------------- móveis editáveis ---------------------------
-   mover() constrói um móvel nas coordenadas do apartamento, mede a caixa e
-   guarda as peças relativas ao centro dela. Depois disso o móvel pode ser
-   movido (x,z) e girado (rot, em quartos de volta) sem refazer a geometria. */
-const ITEMS = [];
+   Cada peça é um ITEM: tem um modelo (variante) e partes com cor própria.
 
-function mover(id, nome, build, opt={}){
-  const antCOL = COL, antITEM = ITEM;
-  const tmp = [];
-  const it = { id, nome, cols:[], parts:[], x:0, z:0, rot:0, vis:true, flat:!!opt.flat,
-               custom:!!opt.custom, tipo:opt.tipo||null };
+   - Os construtores desenham em metros. Peças móveis desenham em torno da
+     origem (o "pivô": o centro da mesa, do sofá...), com as costas voltadas
+     para +Z e a frente para -Z; a orientação inicial vem de rot0.
+     Peças fixas (armários, bancadas) desenham direto nas coordenadas do
+     apartamento e o pivô sai do centro da caixa delas.
+   - Uma PARTE é um "slot" (estofado, braço, pé, tampo...). O construtor usa
+     SM("estofado") no lugar de um material; a cor real só é escolhida na
+     hora de montar: o padrão da peça segue o estilo global (M.*), e uma cor
+     escolhida à mão vira um material próprio, compartilhado por todas as
+     peças que escolherem a mesma opção — poucas draw calls a mais.            */
+const ITEMS = [];
+const OV = {};                       // materiais de cor individual, por tipo:opção
+const SMS = {};
+const SM = n => {
+  if(!SMS[n]){ const m = new THREE.MeshBasicMaterial(); m.userData.slot = n; SMS[n] = m; }
+  return SMS[n];
+};
+
+/* paletas por tipo de parte */
+const PAL = {
+  tecido: [
+    { id:"areia",    nome:"Areia",     sw:"#C2BBAD", cor:0xC2BBAD },
+    { id:"gelo",     nome:"Gelo",      sw:"#E8E3D8", cor:0xE8E3D8 },
+    { id:"cinza",    nome:"Cinza",     sw:"#A9ABAD", cor:0xA9ABAD },
+    { id:"grafite",  nome:"Grafite",   sw:"#5A5C60", cor:0x5A5C60 },
+    { id:"preto",    nome:"Preto",     sw:"#2B2B2D", cor:0x2B2B2D },
+    { id:"verde",    nome:"Verde",     sw:"#6E8B74", cor:0x6E8B74 },
+    { id:"azul",     nome:"Azul",      sw:"#7E93A8", cor:0x7E93A8 },
+    { id:"petroleo", nome:"Petróleo",  sw:"#3F6470", cor:0x3F6470 },
+    { id:"terracota",nome:"Terracota", sw:"#C08466", cor:0xC08466 },
+    { id:"mostarda", nome:"Mostarda",  sw:"#C9A24A", cor:0xC9A24A },
+    { id:"rose",     nome:"Rosé",      sw:"#C79A98", cor:0xC79A98 },
+    { id:"marrom",   nome:"Marrom",    sw:"#8A6A4F", cor:0x8A6A4F },
+  ],
+  laca: [
+    { id:"branco",   nome:"Branco",    sw:"#F0ECE4", cor:0xF0ECE4 },
+    { id:"gelo",     nome:"Gelo",      sw:"#DDD8CE", cor:0xDDD8CE },
+    { id:"bege",     nome:"Bege",      sw:"#CDBBA0", cor:0xCDBBA0 },
+    { id:"cinza",    nome:"Cinza",     sw:"#A8A6A1", cor:0xA8A6A1 },
+    { id:"grafite",  nome:"Grafite",   sw:"#2F2C29", cor:0x2F2C29 },
+    { id:"preto",    nome:"Preto",     sw:"#151413", cor:0x151413 },
+    { id:"verde",    nome:"Verde",     sw:"#4E6152", cor:0x4E6152 },
+    { id:"petroleo", nome:"Petróleo",  sw:"#2F5560", cor:0x2F5560 },
+    { id:"azul",     nome:"Azul",      sw:"#6B849B", cor:0x6B849B },
+    { id:"terracota",nome:"Terracota", sw:"#A4553A", cor:0xA4553A },
+    { id:"mostarda", nome:"Mostarda",  sw:"#C9962C", cor:0xC9962C },
+    { id:"rose",     nome:"Rosé",      sw:"#B98686", cor:0xB98686 },
+  ],
+  metal: [
+    { id:"inox",     nome:"Inox",      sw:"#C2C7CA", cor:0xC2C7CA, rough:.30, met:.55 },
+    { id:"grafite",  nome:"Grafite",   sw:"#4A4C4F", cor:0x4A4C4F, rough:.40, met:.50 },
+    { id:"preto",    nome:"Preto fosco",sw:"#1F1F20",cor:0x1F1F20, rough:.45, met:.40 },
+    { id:"dourado",  nome:"Dourado",   sw:"#C9A24A", cor:0xC9A24A, rough:.35, met:.80 },
+    { id:"cobre",    nome:"Cobre",     sw:"#B87333", cor:0xB87333, rough:.35, met:.80 },
+    { id:"branco",   nome:"Branco",    sw:"#F2F2F0", cor:0xF2F2F0, rough:.40, met:.10 },
+  ],
+  eletro: [
+    { id:"inox",     nome:"Inox",      sw:"#C2C7CA", cor:0xC2C7CA, rough:.30, met:.55 },
+    { id:"branco",   nome:"Branco",    sw:"#F2F2F0", cor:0xF2F2F0, rough:.35, met:.10 },
+    { id:"preto",    nome:"Preto",     sw:"#24242A", cor:0x24242A, rough:.30, met:.30 },
+    { id:"grafite",  nome:"Grafite",   sw:"#4A4C4F", cor:0x4A4C4F, rough:.30, met:.50 },
+    { id:"menta",    nome:"Menta",     sw:"#A9CDBB", cor:0xA9CDBB, rough:.35, met:.10 },
+    { id:"creme",    nome:"Creme",     sw:"#E8DFC8", cor:0xE8DFC8, rough:.40, met:.05 },
+    { id:"vermelho", nome:"Vermelho",  sw:"#A8362B", cor:0xA8362B, rough:.35, met:.10 },
+  ],
+  planta: [
+    { id:"verde",    nome:"Verde",     sw:"#4F7A4A", cor:0x4F7A4A },
+    { id:"escuro",   nome:"Verde escuro",sw:"#2F5B3A",cor:0x2F5B3A },
+    { id:"claro",    nome:"Verde claro",sw:"#7FA35C",cor:0x7FA35C },
+    { id:"oliva",    nome:"Oliva",     sw:"#707A3F", cor:0x707A3F },
+    { id:"azulado",  nome:"Azulado",   sw:"#4A6F68", cor:0x4A6F68 },
+  ],
+};
+PAL.madeira = OPC.mad;     // mesmas opções do acabamento global de marcenaria
+PAL.ripado  = OPC.mad;     // painel ripado: a textura de ripas acompanha a madeira
+PAL.pedra   = OPC.gran;
+const TIPO_NOME = { tecido:"Tecido", laca:"Pintura", metal:"Metal", eletro:"Acabamento", planta:"Folhagem",
+                    madeira:"Madeira", ripado:"Madeira", pedra:"Pedra" };
+
+function matOverride(tipo, id){
+  const key = tipo+":"+id;
+  if(OV[key]) return OV[key];
+  const o = (PAL[tipo]||[]).find(x=>x.id===id); if(!o) return null;
+  const S = p => new THREE.MeshStandardMaterial(p);
+  let m;
+  switch(tipo){
+    case "tecido": m = S({ color:o.cor, roughness:.92, metalness:0 }); break;
+    case "laca":   m = S({ color:o.cor, roughness:.42, metalness:.02 }); break;
+    case "planta": m = S({ color:o.cor, roughness:.90, metalness:0 }); break;
+    case "metal": case "eletro":
+                   m = S({ color:o.cor, roughness:o.rough, metalness:o.met }); break;
+    case "madeira":m = S({ map:o.tex ? getTx(o.tex) : null, color:o.cor, roughness:o.rough, metalness:0 }); break;
+    case "ripado": m = S({ map:getTx(o.rip), roughness:.58, metalness:0 }); break;
+    case "pedra":  m = S({ map:getTx(o.tex), roughness:o.rough, metalness:o.met }); break;
+    default: return null;
+  }
+  m.envMapIntensity = (LUZ[A.luz] || LUZ.dia).env;
+  return OV[key] = m;
+}
+/* material de uma parte: cor escolhida > padrão do estilo global */
+function matDe(it, p){
+  if(!p.slot) return p.mat;
+  const d = it.def.slots[p.slot]; if(!d) return M.branco;
+  const oid = it.o[p.slot];
+  if(oid){ const m = matOverride(d.t, oid); if(m) return m; }
+  return M[d.b] || M.branco;
+}
+
+/* ----------------------- primitivas de construção ----------------------- */
+/* caixa de cantos arredondados (extrusão com chanfro): é o que tira o aspecto
+   de bloco dos estofados. Poucos segmentos — ~100 triângulos por peça. */
+const _gRB = {};
+function geoRB(w,h,d,r){
+  const k = [w,h,d,r].map(v=>v.toFixed(3)).join("|");
+  if(_gRB[k]) return _gRB[k];
+  r = Math.min(r, w/2-0.003, h/2-0.003, d/2-0.003);
+  const b = r*0.8, sw = w-2*b, sh = h-2*b, sd = Math.max(d-2*b, 0.002);
+  const hw = sw/2, hh = sh/2, c = Math.max(Math.min(r*0.8, hw-0.001, hh-0.001), 0.002);
+  const s = new THREE.Shape();
+  s.moveTo(-hw+c,-hh); s.lineTo(hw-c,-hh); s.quadraticCurveTo(hw,-hh,hw,-hh+c);
+  s.lineTo(hw,hh-c);   s.quadraticCurveTo(hw,hh,hw-c,hh);
+  s.lineTo(-hw+c,hh);  s.quadraticCurveTo(-hw,hh,-hw,hh-c);
+  s.lineTo(-hw,-hh+c); s.quadraticCurveTo(-hw,-hh,-hw+c,-hh);
+  const g = new THREE.ExtrudeGeometry(s, { depth:sd, bevelEnabled:true, bevelThickness:b, bevelSize:b,
+                                            bevelSegments:1, curveSegments:2, steps:1 });
+  g.translate(0,0,-sd/2);
+  return _gRB[k] = g;
+}
+/* caixa com inclinação: a ordem YXZ inclina na própria peça e depois gira */
+function bx(w,h,d, mat, x,y,z, rx=0,ry=0,rz=0){
+  const m = box(w,h,d,mat,x,y,z); m.rotation.order = "YXZ"; m.rotation.set(rx,ry,rz); return m;
+}
+function rb(w,h,d, mat, x,y,z, r=0.035, rx=0,ry=0,rz=0){
+  const m = new THREE.Mesh(geoRB(w,h,d,r), mat);
+  m.position.set(x,y,z); m.rotation.order = "YXZ"; m.rotation.set(rx,ry,rz);
+  return add(m);
+}
+const col = (x0,z0,x1,z1) => addBoxCollider(x0,z0,x1,z1);
+/* peça no referencial de outra (cadeira girada em volta de uma mesa) */
+function sub(x,z,ang){
+  const c = Math.cos(ang), s = Math.sin(ang);
+  const P = (lx,lz) => [x+lx*c+lz*s, z-lx*s+lz*c];
+  return {
+    bx:(w,h,d,mat,lx,y,lz,rx=0)=>{ const [px,pz]=P(lx,lz); return bx(w,h,d,mat,px,y,pz,rx,ang,0); },
+    rb:(w,h,d,mat,lx,y,lz,r=0.03,rx=0)=>{ const [px,pz]=P(lx,lz); return rb(w,h,d,mat,px,y,pz,r,rx,ang,0); },
+    cil:(rt,rbt,h,mat,lx,y,lz,seg=12)=>{ const [px,pz]=P(lx,lz); return cil(rt,rbt,h,mat,px,y,pz,seg); },
+  };
+}
+/* costas da cadeira para +Z local; ang gira em volta do eixo Y */
+function cadeira(x,z,ang){
+  const S = sub(x,z,ang);
+  S.rb(0.44,0.07,0.44, SM("cad"), 0,0.45,0, 0.02);
+  S.rb(0.42,0.40,0.045,SM("cad"), 0,0.73,0.205, 0.02, 0.10);
+  for(const sx of [-1,1]) for(const sz of [-1,1]) S.bx(0.035,0.42,0.035, SM("pecad"), sx*0.185,0.21,sz*0.185);
+}
+/* puxador perfil embutido — risco escuro que dá leitura de marcenaria */
+function perfil(w, x, y, z, rot=0){ box(w, 0.018, 0.02, M.lacaEsc, x, y, z, rot); }
+
+/* ------------------------------ modelos --------------------------------- */
+const DEFS = {};
+function def(key, d){ d.key = key; d.P = d.P || {}; DEFS[key] = d; return d; }
+
+/* ---- sofá ---- */
+function sofaPes(W,D,extra=[]){
+  for(const sx of [-1,1]) for(const sz of [-1,1]) cil(0.025,0.02,0.12, SM("pe"), sx*(W/2-0.10),0.06,sz*(D/2-0.10), 8);
+  for(const [x,z] of extra) cil(0.025,0.02,0.12, SM("pe"), x,0.06,z, 8);
+}
+function sofaLinha(W){
+  const D = 0.94, aw = 0.19;
+  sofaPes(W,D);
+  rb(W,0.20,D, SM("est"), 0,0.22,0, 0.03);                                  // base
+  const iw = W-2*aw, n = Math.max(2, Math.round(iw/0.58)), cw = iw/n;
+  for(let i=0;i<n;i++){
+    const x = -iw/2 + cw*(i+0.5);
+    rb(cw-0.02,0.15,D-0.30, SM("est"), x,0.395,-0.06, 0.05);               // assento
+    rb(cw-0.02,0.36,0.15,  SM("est"), x,0.62,0.29, 0.05, 0.16);             // encosto
+  }
+  rb(iw,0.36,0.12, SM("est"), 0,0.57,D/2-0.07, 0.03);                      // costas
+  for(const s of [-1,1]) rb(aw,0.30,D, SM("braco"), s*(W/2-aw/2),0.47,0, 0.05);
+  rb(0.40,0.40,0.12, SM("almof"), -iw/2+0.24,0.66,0.12, 0.06, 0.22, 0, 0.14);
+  rb(0.40,0.40,0.12, SM("almof"),  iw/2-0.24,0.66,0.12, 0.06, 0.22, 0,-0.12);
+  col(-W/2,-D/2,W/2,D/2); sombra(0,0,W+0.6,D+0.6);
+}
+function sofaChaise(){
+  const W = 2.22, D = 0.94, aw = 0.19, cz = 0.78, cw = 0.72;
+  sofaPes(W,D,[[-W/2+cw/2, -D/2-cz+0.08]]);
+  rb(W,0.20,D, SM("est"), 0,0.22,0, 0.03);
+  rb(cw,0.20,cz+0.04, SM("est"), -W/2+cw/2,0.22,-D/2-cz/2+0.02, 0.03);       // chaise: base
+  rb(cw-0.04,0.15,D+cz-0.17, SM("est"), -W/2+cw/2,0.395,-(cz+0.13)/2, 0.05); // chaise: assento
+  const rw = W-cw-aw, n = 2, sw = rw/n;
+  for(let i=0;i<n;i++){
+    const x = -W/2+cw + sw*(i+0.5);
+    rb(sw-0.02,0.15,D-0.30, SM("est"), x,0.395,-0.06, 0.05);
+    rb(sw-0.02,0.36,0.15,  SM("est"), x,0.62,0.29, 0.05, 0.16);
+  }
+  rb(cw-0.04,0.36,0.15, SM("est"), -W/2+cw/2,0.62,0.29, 0.05, 0.16);          // encosto sobre a chaise
+  rb(W-aw,0.36,0.12, SM("est"), -aw/2,0.57,D/2-0.07, 0.03);
+  rb(aw,0.30,D, SM("braco"), W/2-aw/2,0.47,0, 0.05);
+  rb(0.40,0.40,0.12, SM("almof"), W/2-aw-0.22,0.66,0.12, 0.06, 0.22, 0,-0.12);
+  rb(0.40,0.40,0.12, SM("almof"), -W/2+0.26,0.62,0.12, 0.06, 0.22, 0, 0.14);
+  col(-W/2,-D/2,W/2,D/2); col(-W/2,-D/2-cz,-W/2+cw,-D/2);
+  sombra(0,-0.2,W+0.6,D+cz+0.5);
+}
+def("sofa", { nome:"Sofá", cat:true, sala:"Sala",
+  slots:{ est:{n:"Estofado",t:"tecido",b:"tecido"}, braco:{n:"Braços",t:"tecido",b:"tecidoEsc"},
+          almof:{n:"Almofadas",t:"tecido",b:"verde"}, pe:{n:"Pés",t:"metal",b:"lacaEsc"} },
+  vars:[ { id:"l3", n:"3 lugares", f:()=>sofaLinha(1.80) },
+         { id:"l2", n:"2 lugares", f:()=>sofaLinha(1.40) },
+         { id:"ch", n:"Com chaise", f:()=>sofaChaise() } ] });
+
+/* ---- poltrona ---- */
+def("poltrona", { nome:"Poltrona", cat:true, sala:"Sala",
+  slots:{ est:{n:"Estofado",t:"tecido",b:"tecido"}, braco:{n:"Braços",t:"tecido",b:"tecidoEsc"},
+          pe:{n:"Pés",t:"metal",b:"lacaEsc"} },
+  vars:[
+    { id:"cl", n:"Clássica", f:()=>{
+        const W=0.80, D=0.82;
+        for(const sx of [-1,1]) for(const sz of [-1,1]) cil(0.025,0.02,0.10, SM("pe"), sx*(W/2-0.07),0.05,sz*(D/2-0.07), 8);
+        rb(W,0.18,D, SM("est"), 0,0.19,0, 0.03);
+        rb(W-0.30,0.14,D-0.28, SM("est"), 0,0.35,-0.06, 0.05);
+        rb(W-0.30,0.40,0.14, SM("est"), 0,0.58,D/2-0.14, 0.05, 0.12);
+        rb(W-0.30,0.34,0.10, SM("est"), 0,0.55,D/2-0.06, 0.03);
+        for(const s of [-1,1]) rb(0.15,0.28,D, SM("braco"), s*(W/2-0.075),0.43,0, 0.05);
+        col(-W/2,-D/2,W/2,D/2); sombra(0,0,1.2,1.2); } },
+    { id:"mo", n:"Moderna", f:()=>{
+        for(const sx of [-1,1]) for(const sz of [-1,1])
+          bx(0.03,0.30,0.03, SM("pe"), sx*0.28,0.15,sz*0.28, sz*0.10, 0, -sx*0.10);
+        rb(0.74,0.11,0.74, SM("est"), 0,0.32,0, 0.05);
+        rb(0.74,0.12,0.66, SM("est"), 0,0.43,-0.02, 0.06);
+        rb(0.72,0.46,0.12, SM("est"), 0,0.65,0.32, 0.06, 0.24);
+        col(-0.37,-0.37,0.37,0.40); sombra(0,0,1.1,1.1); } },
+  ] });
+
+/* ---- mesas e cadeiras ---- */
+function mesaRet(L, porLado){
+  const W = 0.85;
+  box(W,0.05,L, SM("tampo"), 0,0.74,0);
+  for(const sx of [-1,1]) for(const sz of [-1,1]) box(0.07,0.72,0.07, SM("pe"), sx*(W/2-0.09),0.36,sz*(L/2-0.10));
+  const zs = porLado===3 ? [-0.48,0,0.48] : [-0.32,0.32];
+  for(const z of zs){ cadeira(-0.54,z,-Math.PI/2); cadeira(0.54,z,Math.PI/2); }
+  col(-0.76,-(L/2-0.05),0.76,L/2-0.05); sombra(0,0,1.9,L+0.75);
+}
+function mesaRedonda(r, phis, rr){
+  cil(r,r,0.05, SM("tampo"), 0,0.74,0, 24);
+  cil(0.07,0.07,0.69, SM("pe"), 0,0.375,0, 12);
+  cil(0.30,0.30,0.03, SM("pe"), 0,0.015,0, 20);
+  for(const a of phis) cadeira(Math.sin(a)*rr, Math.cos(a)*rr, a);
+  const m = rr+0.24;
+  col(-m,-m,m,m); sombra(0,0,m*2+0.5,m*2+0.5);
+}
+const SLOTS_MESA = { tampo:{n:"Tampo",t:"madeira",b:"madeira"}, pe:{n:"Pé da mesa",t:"laca",b:"lacaEsc"},
+                     cad:{n:"Cadeiras",t:"tecido",b:"tecido"}, pecad:{n:"Pés das cadeiras",t:"laca",b:"lacaEsc"} };
+def("jantar", { nome:"Mesa de jantar", cat:true, sala:"Sala", slots:SLOTS_MESA,
+  vars:[ { id:"r6", n:"Retangular · 6", f:()=>mesaRet(1.55,3) },
+         { id:"r4", n:"Retangular · 4", f:()=>mesaRet(1.20,2) },
+         { id:"red",n:"Redonda · 4",   f:()=>mesaRedonda(0.55,[Math.PI,0,-Math.PI/2,Math.PI/2],0.78) } ] });
+def("mesa_t", { nome:"Mesa de varanda", cat:true, sala:"Terraço",
+  slots:{ tampo:{n:"Tampo",t:"madeira",b:"madeira"}, pe:{n:"Pé da mesa",t:"laca",b:"lacaEsc"},
+          cad:{n:"Cadeiras",t:"laca",b:"laca"}, pecad:{n:"Pés das cadeiras",t:"laca",b:"lacaEsc"} },
+  vars:[ { id:"r3", n:"Redonda · 3", f:()=>{
+            cil(0.40,0.40,0.05, SM("tampo"), 0,0.74,0, 20);
+            box(0.09,0.72,0.09, SM("pe"), 0,0.37,0); box(0.44,0.04,0.44, SM("pe"), 0,0.02,0);
+            for(const a of [Math.PI,0,-Math.PI/2]) cadeira(Math.sin(a)*0.58, Math.cos(a)*0.58, a);
+            col(-0.40,-0.43,0.44,0.45); sombra(0,0,1.5,1.5); } },
+         { id:"r4", n:"Redonda · 4", f:()=>{
+            cil(0.40,0.40,0.05, SM("tampo"), 0,0.74,0, 20);
+            box(0.09,0.72,0.09, SM("pe"), 0,0.37,0); box(0.44,0.04,0.44, SM("pe"), 0,0.02,0);
+            for(const a of [Math.PI,0,-Math.PI/2,Math.PI/2]) cadeira(Math.sin(a)*0.58, Math.cos(a)*0.58, a);
+            col(-0.82,-0.82,0.82,0.82); sombra(0,0,1.8,1.8); } },
+         { id:"bi", n:"Bistrô · 2", f:()=>{
+            cil(0.30,0.30,0.04, SM("tampo"), 0,0.74,0, 18);
+            cil(0.035,0.035,0.72, SM("pe"), 0,0.38,0, 8); cil(0.22,0.22,0.03, SM("pe"), 0,0.015,0, 16);
+            for(const a of [Math.PI,0]) cadeira(Math.sin(a)*0.46, Math.cos(a)*0.46, a);
+            col(-0.30,-0.70,0.30,0.70); sombra(0,0,1.1,1.6); } } ] });
+def("mesa_centro", { nome:"Mesa de centro", cat:true, sala:"Sala",
+  slots:{ tampo:{n:"Tampo",t:"madeira",b:"madeira"}, pe:{n:"Pés",t:"metal",b:"lacaEsc"} },
+  vars:[
+    { id:"ret", n:"Retangular", f:()=>{
+        box(1.00,0.04,0.60, SM("tampo"), 0,0.40,0);
+        for(const sx of [-1,1]) for(const sz of [-1,1]) box(0.04,0.38,0.04, SM("pe"), sx*0.46,0.19,sz*0.26);
+        box(0.90,0.02,0.50, SM("pe"), 0,0.14,0);
+        col(-0.50,-0.30,0.50,0.30); sombra(0,0,1.3,0.9); } },
+    { id:"red", n:"Redonda", f:()=>{
+        cil(0.42,0.42,0.04, SM("tampo"), 0,0.40,0, 22);
+        for(const a of [0,2.094,4.189]) cil(0.018,0.018,0.38, SM("pe"), Math.sin(a)*0.30,0.19,Math.cos(a)*0.30, 6);
+        col(-0.42,-0.42,0.42,0.42); sombra(0,0,1.1,1.1); } },
+    { id:"duo", n:"Duas peças", f:()=>{
+        box(0.80,0.04,0.58, SM("tampo"), -0.14,0.44,0);
+        for(const sx of [-1,1]) for(const sz of [-1,1]) box(0.035,0.42,0.035, SM("pe"), -0.14+sx*0.36,0.21,sz*0.25);
+        box(0.50,0.04,0.40, SM("tampo"), 0.50,0.32,0.12);
+        for(const sx of [-1,1]) for(const sz of [-1,1]) box(0.03,0.30,0.03, SM("pe"), 0.50+sx*0.21,0.15,0.12+sz*0.16);
+        col(-0.54,-0.29,0.75,0.32); sombra(0,0,1.7,1.0); } },
+  ] });
+def("apoio", { nome:"Mesa lateral", cat:true, sala:"Sala", P:{ s:0.44, h:0.40 },
+  slots:{ corpo:{n:"Corpo",t:"madeira",b:"madeira"} },
+  vars:[
+    { id:"q", n:"Quadrada", f:(P)=>{ box(P.s,P.h,P.s, SM("corpo"), 0,P.h/2,0); col(-P.s/2,-P.s/2,P.s/2,P.s/2); } },
+    { id:"r", n:"Redonda",  f:(P)=>{ cil(P.s/2,P.s/2,P.h, SM("corpo"), 0,P.h/2,0, 20); col(-P.s/2,-P.s/2,P.s/2,P.s/2); } },
+    { id:"d", n:"Duas alturas", f:(P)=>{
+        box(P.s,P.h,P.s, SM("corpo"), 0,P.h/2,0);
+        box(P.s*0.75,P.h*0.7,P.s*0.75, SM("corpo"), P.s*0.75,P.h*0.35,P.s*0.15);
+        col(-P.s/2,-P.s/2,P.s*1.12,P.s*0.52); } },
+  ] });
+def("tapete", { nome:"Tapete", cat:true, sala:"Sala", flat:true, P:{ w:1.36, d:1.30 },
+  slots:{ tapete:{n:"Tecido",t:"tecido",b:"tapete"} },
+  vars:[
+    { id:"ret", n:"Retangular", f:(P)=>{ box(P.w,0.012,P.d, SM("tapete"), 0,0.008,0); } },
+    { id:"red", n:"Redondo",    f:(P)=>{ const r = Math.min(P.w,P.d)/2; cil(r,r,0.012, SM("tapete"), 0,0.008,0, 28); } },
+    { id:"ova", n:"Oval",       f:(P)=>{ const m = cil(P.w/2,P.w/2,0.012, SM("tapete"), 0,0.008,0, 28); m.scale.z = P.d/P.w; } },
+  ] });
+
+/* ---- camas ---- */
+const SLOTS_CAMA = { base:{n:"Base",t:"madeira",b:"madeira"}, roupa:{n:"Roupa de cama",t:"tecido",b:"branco"},
+                     manta:{n:"Manta",t:"tecido",b:"verde"}, trav:{n:"Travesseiros",t:"tecido",b:"branco"},
+                     cab:{n:"Cabeceira estofada",t:"tecido",b:"tecidoEsc"} };
+function camaS(est){                              // solteiro: 0,92 x 1,92 m, cabeceira em +Z
+  const W = 0.92, L = 1.92;
+  if(est==="pes"){
+    for(const sx of [-1,1]) for(const sz of [-1,1]) bx(0.05,0.18,0.05, SM("base"), sx*(W/2-0.06),0.09,sz*(L/2-0.06));
+    box(W,0.10,L, SM("base"), 0,0.23,0);
+    rb(W-0.04,0.20,L-0.04, SM("roupa"), 0,0.38,0, 0.05);
+  } else {
+    box(W,0.26,L, SM("base"), 0,0.13,0);
+    rb(W-0.04,0.22,L-0.04, SM("roupa"), 0,0.37,0, 0.05);
+  }
+  rb(W,0.11,1.34, SM("roupa"), 0,est==="pes"?0.58:0.53,-0.24, 0.04);
+  rb(W+0.02,0.07,0.46, SM("manta"), 0,est==="pes"?0.62:0.57,-0.62, 0.03);
+  rb(0.60,0.15,0.34, SM("trav"), 0,est==="pes"?0.58:0.555,0.72, 0.06);
+  let zmax = 0.98;
+  if(est==="est"){ rb(W+0.06,0.80,0.10, SM("cab"), 0,0.62,L/2+0.05, 0.04); zmax = 1.06; }
+  col(-0.48,-0.98,0.48,zmax); sombra(0,0,1.5,2.5);
+}
+function camaC(est){                              // casal: 1,62 x 2,02 m, cabeceira em +Z
+  const W = 1.62, L = 2.02;
+  if(est==="pes"){
+    for(const sx of [-1,1]) for(const sz of [-1,1]) bx(0.06,0.18,0.06, SM("base"), sx*(W/2-0.07),0.09,sz*(L/2-0.07));
+    box(W,0.10,L, SM("base"), 0,0.23,0);
+    rb(W-0.04,0.20,L-0.04, SM("roupa"), 0,0.38,0, 0.05);
+  } else {
+    box(W,0.26,L, SM("base"), 0,0.13,0);
+    rb(W-0.04,0.22,L-0.04, SM("roupa"), 0,0.37,0, 0.05);
+  }
+  const up = est==="pes" ? 0.01 : 0;
+  rb(1.60,0.12,1.42, SM("roupa"), 0,0.54+up,-0.26, 0.04);
+  rb(1.60,0.08,0.50, SM("manta"), 0,0.58+up,-0.74, 0.03);
+  for(const s of [-0.36,0.36]) rb(0.52,0.16,0.36, SM("trav"), s,0.56+up,0.68, 0.06);
+  let zmax = 1.03;
+  if(est==="est"){ rb(W+0.14,0.98,0.12, SM("cab"), 0,0.70,L/2+0.06, 0.05); zmax = 1.12; }
+  col(-0.83,-1.03,0.83,zmax); sombra(0,0,2.2,2.6);
+}
+def("cama_s", { nome:"Cama de solteiro", cat:true, sala:"Dormitório", slots:SLOTS_CAMA,
+  vars:[ { id:"box", n:"Box", f:()=>camaS("box") }, { id:"est", n:"Cabeceira estofada", f:()=>camaS("est") },
+         { id:"pes", n:"Com pés", f:()=>camaS("pes") } ] });
+def("cama_c", { nome:"Cama de casal", cat:true, sala:"Suíte", slots:SLOTS_CAMA,
+  vars:[ { id:"box", n:"Box", f:()=>camaC("box") }, { id:"est", n:"Cabeceira estofada", f:()=>camaC("est") },
+         { id:"pes", n:"Com pés", f:()=>camaC("pes") } ] });
+
+/* ---- criado-mudo, escrivaninha, penteadeira, aparador ---- */
+def("criado", { nome:"Criado-mudo", cat:true, sala:"Dormitório", P:{ w:0.46, d:0.40 },
+  slots:{ corpo:{n:"Corpo",t:"madeira",b:"madeira"}, puxador:{n:"Puxadores",t:"metal",b:"lacaEsc"} },
+  vars:[
+    { id:"g", n:"Gaveta", f:(P)=>{
+        box(P.w,0.46,P.d, SM("corpo"), 0,0.23,0);
+        box(P.w+0.04,0.04,P.d+0.04, SM("corpo"), 0,0.48,0);
+        box(P.w*0.40,0.016,0.016, SM("puxador"), 0,0.38,-P.d/2-0.01);
+        box(P.w*0.40,0.016,0.016, SM("puxador"), 0,0.17,-P.d/2-0.01);
+        col(-P.w/2+0.01,-P.d/2+0.01,P.w/2-0.01,P.d/2-0.01); } },
+    { id:"a", n:"Aberto", f:(P)=>{
+        box(P.w+0.04,0.04,P.d+0.04, SM("corpo"), 0,0.50,0);
+        box(P.w-0.02,0.03,P.d-0.02, SM("corpo"), 0,0.22,0);
+        for(const sx of [-1,1]) for(const sz of [-1,1]) box(0.035,0.50,0.035, SM("puxador"), sx*(P.w/2-0.03),0.25,sz*(P.d/2-0.03));
+        col(-P.w/2+0.01,-P.d/2+0.01,P.w/2-0.01,P.d/2-0.01); } },
+    { id:"r", n:"Redondo", f:(P)=>{
+        const r = Math.min(P.w, P.d*1.7)/2;
+        cil(r,r,0.04, SM("corpo"), 0,0.50,0, 20);
+        for(const a of [0,2.094,4.189]) cil(0.016,0.016,0.48, SM("puxador"), Math.sin(a)*r*0.7,0.24,Math.cos(a)*r*0.7, 6);
+        col(-r,-r,r,r); } },
+  ] });
+def("escrivaninha", { nome:"Escrivaninha", cat:true, sala:"Dormitório", P:{ w:1.02, d:0.50 },
+  slots:{ tampo:{n:"Tampo",t:"madeira",b:"madeira"}, pe:{n:"Pés e painéis",t:"laca",b:"lacaEsc"} },
+  vars:[
+    { id:"p", n:"Painéis laterais", f:(P)=>{
+        box(P.w,0.05,P.d, SM("tampo"), 0,0.74,0);
+        for(const s of [-1,1]) box(0.06,0.72,P.d-0.04, SM("pe"), s*(P.w/2-0.04),0.37,0);
+        col(-P.w/2-0.04,-P.d/2,P.w/2+0.04,P.d/2); } },
+    { id:"l", n:"Pés palito", f:(P)=>{
+        box(P.w,0.04,P.d, SM("tampo"), 0,0.74,0);
+        for(const sx of [-1,1]) for(const sz of [-1,1]) bx(0.035,0.72,0.035, SM("pe"), sx*(P.w/2-0.06),0.36,sz*(P.d/2-0.05), sz*0.06,0,-sx*0.06);
+        col(-P.w/2,-P.d/2,P.w/2,P.d/2); } },
+    { id:"g", n:"Com gaveteiro", f:(P)=>{
+        box(P.w,0.04,P.d, SM("tampo"), 0,0.74,0);
+        box(0.05,0.72,P.d-0.04, SM("pe"), -(P.w/2-0.04),0.37,0);
+        box(0.40,0.68,P.d-0.04, SM("tampo"), P.w/2-0.22,0.36,0);
+        for(const y of [0.58,0.40,0.22]) box(0.30,0.016,0.016, SM("pe"), P.w/2-0.22,y,-P.d/2+0.0);
+        col(-P.w/2-0.04,-P.d/2,P.w/2+0.04,P.d/2); } },
+  ] });
+def("penteadeira", { nome:"Penteadeira", cat:true, sala:"Suíte", P:{ w:0.72, d:0.40 },
+  slots:{ tampo:{n:"Tampo",t:"madeira",b:"madeira"}, pe:{n:"Pés",t:"laca",b:"lacaEsc"} },
+  vars:[
+    { id:"p", n:"Com pernas", f:(P)=>{
+        box(P.w,0.06,P.d, SM("tampo"), 0,0.52,0);
+        for(const s of [-1,1]) box(0.04,0.50,P.d-0.04, SM("pe"), s*(P.w/2-0.04),0.25,0);
+        col(-P.w/2-0.04,-P.d/2-0.02,P.w/2+0.04,P.d/2+0.02); } },
+    { id:"g", n:"Com gavetas", f:(P)=>{
+        box(P.w,0.06,P.d, SM("tampo"), 0,0.54,0);
+        box(P.w-0.04,0.48,P.d-0.02, SM("tampo"), 0,0.24,0);
+        for(const y of [0.18,0.36]) box(P.w*0.35,0.016,0.016, SM("pe"), 0,y,-P.d/2-0.008);
+        col(-P.w/2,-P.d/2,P.w/2,P.d/2); } },
+  ] });
+def("aparador", { nome:"Aparador", cat:true, sala:"Sala", P:{ w:1.30, d:0.38, h:0.70, tampo:false },
+  slots:{ corpo:{n:"Corpo",t:"madeira",b:"madeira"}, tampo:{n:"Tampo",t:"pedra",b:"granito"},
+          frente:{n:"Frentes ripadas",t:"ripado",b:"ripado"}, puxador:{n:"Puxadores",t:"metal",b:"lacaEsc"} },
+  vars:[
+    { id:"g", n:"Gavetas", f:(P)=>{
+        const hc = P.tampo ? P.h-0.04 : P.h;
+        box(P.w,hc,P.d, SM("corpo"), 0,hc/2,0);
+        if(P.tampo) box(P.w+0.04,0.04,P.d+0.04, SM("tampo"), 0,hc+0.02,0);
+        for(const s of [-1,1]) for(const y of [hc*0.72,hc*0.30]) box(P.w*0.30,0.016,0.016, SM("puxador"), s*P.w*0.24,y,-P.d/2-0.01);
+        box(0.008,hc*0.92,0.01, SM("puxador"), 0,hc/2,-P.d/2-0.005);
+        col(-P.w/2,-P.d/2,P.w/2,P.d/2); } },
+    { id:"r", n:"Portas ripadas", f:(P)=>{
+        const hc = P.tampo ? P.h-0.04 : P.h;
+        box(P.w,hc,P.d, SM("corpo"), 0,hc/2,0);
+        boxT(P.w-0.06,hc-0.08,0.02, SM("frente"), 0,hc/2,-P.d/2-0.008, 1.0);
+        if(P.tampo) box(P.w+0.04,0.04,P.d+0.04, SM("tampo"), 0,hc+0.02,0);
+        col(-P.w/2,-P.d/2,P.w/2,P.d/2); } },
+    { id:"a", n:"Aberto com pés", f:(P)=>{
+        const hl = P.h-0.04;
+        box(P.w+0.04,0.04,P.d+0.02, SM(P.tampo?"tampo":"corpo"), 0,P.h-0.02,0);
+        box(P.w-0.04,0.03,P.d-0.04, SM("corpo"), 0,P.h*0.42,0);
+        box(P.w-0.04,0.03,P.d-0.04, SM("corpo"), 0,P.h*0.70,0);
+        for(const sx of [-1,1]) for(const sz of [-1,1]) bx(0.04,hl,0.04, SM("puxador"), sx*(P.w/2-0.04),hl/2,sz*(P.d/2-0.04));
+        col(-P.w/2,-P.d/2,P.w/2,P.d/2); } },
+  ] });
+
+/* ---- decoração ---- */
+def("puff", { nome:"Puff", cat:true, sala:"Sala",
+  slots:{ est:{n:"Tecido",t:"tecido",b:"tecidoEsc"} },
+  vars:[
+    { id:"r", n:"Redondo",  f:()=>{ cil(0.26,0.24,0.38, SM("est"), 0,0.19,0, 20); col(-0.26,-0.26,0.26,0.26); sombra(0,0,0.8,0.8); } },
+    { id:"q", n:"Quadrado", f:()=>{ rb(0.50,0.38,0.50, SM("est"), 0,0.19,0, 0.09); col(-0.25,-0.25,0.25,0.25); sombra(0,0,0.8,0.8); } },
+  ] });
+def("planta", { nome:"Planta", cat:true, sala:"Sala",
+  slots:{ vaso:{n:"Vaso",t:"laca",b:"branco"}, folha:{n:"Folhas",t:"planta",b:"folha"} },
+  vars:[
+    { id:"ar", n:"Arbusto", f:()=>{
+        cil(0.17,0.13,0.30, SM("vaso"), 0,0.15,0, 16);
+        for(const [x,y,z,r,sy] of [[0,0.78,0,0.30,1.55],[0.14,0.62,0.10,0.20,1.3],[-0.12,0.66,-0.1,0.2,1.4]]){
+          const m = new THREE.Mesh(new THREE.IcosahedronGeometry(r,1), SM("folha"));
+          m.scale.y = sy; m.position.set(x,y,z); add(m);
+        }
+        col(-0.20,-0.20,0.20,0.20); sombra(0,0,0.8,0.8); } },
+    { id:"pa", n:"Palmeira", f:()=>{
+        cil(0.19,0.14,0.36, SM("vaso"), 0,0.18,0, 16);
+        cil(0.022,0.03,1.20, SM("folha"), 0,0.92,0, 6);
+        for(let i=0;i<7;i++){
+          const a = i/7*Math.PI*2 + 0.3;
+          bx(0.62,0.012,0.15, SM("folha"), Math.sin(a)*0.30,1.50-(i%2)*0.06,Math.cos(a)*0.30, 0, a-Math.PI/2, -0.55);
+        }
+        col(-0.20,-0.20,0.20,0.20); sombra(0,0,0.9,0.9); } },
+    { id:"sa", n:"Samambaia", f:()=>{
+        cil(0.20,0.15,0.26, SM("vaso"), 0,0.13,0, 16);
+        for(let i=0;i<9;i++){
+          const a = i/9*Math.PI*2;
+          const m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.16,0), SM("folha"));
+          m.scale.set(1,0.6,1); m.position.set(Math.sin(a)*0.18,0.40+(i%3)*0.05,Math.cos(a)*0.18); add(m);
+        }
+        const c = new THREE.Mesh(new THREE.IcosahedronGeometry(0.22,1), SM("folha"));
+        c.scale.set(1,0.8,1); c.position.set(0,0.52,0); add(c);
+        col(-0.34,-0.34,0.34,0.34); sombra(0,0,1.0,1.0); } },
+  ] });
+def("rack", { nome:"Estante", cat:true, sala:"Sala",
+  slots:{ corpo:{n:"Corpo",t:"madeira",b:"madeira"}, frente:{n:"Frentes",t:"laca",b:"verde"} },
+  vars:[
+    { id:"b", n:"Baixa", f:()=>{
+        box(1.40,0.46,0.36, SM("corpo"), 0,0.23,0); box(1.44,0.03,0.38, SM("corpo"), 0,0.475,0);
+        for(const s of [-0.35,0.35]) box(0.64,0.34,0.02, SM("frente"), s,0.24,-0.185);
+        col(-0.70,-0.18,0.70,0.18); sombra(0,0,1.8,0.8); } },
+    { id:"a", n:"Alta com nichos", f:()=>{
+        for(const s of [-1,1]) box(0.03,1.80,0.34, SM("corpo"), s*0.48,0.90,0);
+        box(0.99,1.80,0.02, SM("corpo"), 0,0.90,0.16);
+        for(const y of [0.03,0.50,0.95,1.40,1.79]) box(0.96,0.03,0.34, SM("corpo"), 0,y,0);
+        box(0.44,0.40,0.02, SM("frente"), -0.24,0.26,-0.16);
+        col(-0.50,-0.17,0.50,0.17); sombra(0,0,1.4,0.8); } },
+  ] });
+def("luminaria", { nome:"Luminária de piso", cat:true, sala:"Sala",
+  slots:{ corpo:{n:"Estrutura",t:"metal",b:"lacaEsc"} },
+  vars:[
+    { id:"t", n:"Torre", f:()=>{
+        cil(0.14,0.14,0.03, SM("corpo"), 0,0.015,0, 16); box(0.02,1.50,0.02, SM("corpo"), 0,0.76,0);
+        cil(0.14,0.22,0.30, M.lampada, 0,1.62,0, 18);
+        col(-0.15,-0.15,0.15,0.15); } },
+    { id:"ar", n:"Arco", f:()=>{
+        cil(0.18,0.20,0.04, SM("corpo"), 0,0.02,0, 16); box(0.02,1.45,0.02, SM("corpo"), -0.20,0.76,0);
+        box(0.62,0.02,0.02, SM("corpo"), 0.10,1.50,0);
+        cil(0.14,0.20,0.26, M.lampada, 0.42,1.34,0, 18);
+        col(-0.24,-0.24,0.24,0.24); } },
+  ] });
+
+/* -------- peças fixas: cor editável, sem arrastar (coordenadas do apê) -------- */
+const FX = (nome, sala, slots, f, extra={}) => Object.assign({ nome, sala, fixo:true, mundo:true, slots, vars:[{ id:"u", n:"Único", f }] }, extra);
+def("bancada_coz", FX("Bancada da cozinha","Cozinha",
+  { corpo:{n:"Armários",t:"madeira",b:"madeira"}, tampo:{n:"Bancada",t:"pedra",b:"granito"} }, ()=>{
+    box(3.20,0.86,0.60, SM("corpo"), 3.70,0.43,0.45);
+    box(3.24,0.05,0.64, SM("tampo"), 3.70,0.89,0.45);
+    box(0.62,0.42,0.40, M.lacaEsc, 2.55,0.92,0.45);                 // cooktop
+    box(0.46,0.02,0.34, M.inox,    4.30,0.91,0.45);                 // cuba
+    perfil(3.10,3.70,0.78,0.76);
+    col(2.10,0.13,5.32,0.78); }));
+def("torre_coz", FX("Torre de armários","Cozinha",
+  { corpo:{n:"Armário",t:"madeira",b:"madeira"}, detalhe:{n:"Faixa",t:"laca",b:"laca"} }, ()=>{
+    boxT(1.36,2.30,0.40, SM("corpo"), 2.78,1.15,1.92, 1.3);
+    box(1.28,0.03,0.04, SM("detalhe"), 2.78,1.62,1.71);
+    col(2.08,1.70,3.48,2.14); }));
+def("aereos_coz", FX("Armários aéreos","Cozinha",
+  { corpo:{n:"Armário",t:"laca",b:"laca"}, depur:{n:"Depurador",t:"metal",b:"inox"} }, ()=>{
+    box(1.08,0.70,0.34, SM("corpo"), 2.66,1.93,0.31);
+    box(0.74,0.10,0.32, SM("depur"), 2.55,1.53,0.30);
+    perfil(1.04,2.66,1.60,0.49); }));
+def("geladeira", FX("Geladeira","Cozinha",
+  { corpo:{n:"Corpo",t:"eletro",b:"inox"} }, ()=>{
+    const cx = 5.76, cz = 0.50;
+    box(0.74,1.84,0.68, SM("corpo"), cx,0.92,cz);
+    box(0.76,0.02,0.70, M.lacaEsc, cx,1.28,cz);
+    for(const s of [-0.26,0.26]) box(0.03,0.56,0.04, M.lacaEsc, cx+s,1.55+(s<0?-0.62:0),cz-0.36);
+    col(cx-0.40,cz-0.38,cx+0.40,cz+0.38);
+    sombra(cx,cz,1.1,1.0); }));
+def("bancada_ter", FX("Bancada do terraço","Terraço",
+  { corpo:{n:"Armário",t:"laca",b:"laca"}, tampo:{n:"Bancada",t:"pedra",b:"granito"} }, ()=>{
+    box(0.78,0.86,0.56, SM("corpo"), 0.52,0.43,0.46);
+    box(0.82,0.05,0.60, SM("tampo"), 0.52,0.88,0.46);
+    col(0.11,0.16,0.94,0.77); }));
+def("painel_tv", FX("Painel da TV","Sala",
+  { ripado:{n:"Painel ripado",t:"ripado",b:"ripado"}, bancada:{n:"Bancada suspensa",t:"laca",b:"lacaEsc"} }, ()=>{
+    boxT(1.34,2.36,0.06, SM("ripado"), 2.76,1.18,3.97, 1.2);
+    box(0.98,0.58,0.05, M.lacaEsc, 2.76,1.20,4.02);                 // TV
+    box(1.22,0.09,0.32, SM("bancada"), 2.76,0.46,4.13);
+    col(2.08,3.93,3.44,4.32); }));
+def("armario_dorm", FX("Armário do dormitório","Dormitório",
+  { corpo:{n:"Armário",t:"laca",b:"laca"}, detalhe:{n:"Faixa",t:"laca",b:"verde"} }, ()=>{
+    box(2.44,2.30,0.56, SM("corpo"), 2.32,1.15,6.86);
+    box(2.32,0.03,0.04, SM("detalhe"), 2.32,1.62,6.57);
+    perfil(2.30,2.32,1.06,6.59);
+    col(1.10,6.56,3.54,7.16); }));
+def("cab_dorm", FX("Cabeceira do dormitório","Dormitório",
+  { painel:{n:"Painel",t:"madeira",b:"madeira"}, nicho:{n:"Nicho",t:"laca",b:"verde"} }, ()=>{
+    boxT(2.06,2.36,0.06, SM("painel"), 2.30,1.18,9.85, 1.3);
+    box(1.86,0.34,0.05, SM("nicho"), 2.30,1.52,9.80);
+    box(1.86,0.04,0.22, SM("painel"), 2.30,1.16,9.72); }));
+def("armario_suite", FX("Armário da suíte","Suíte",
+  { corpo:{n:"Armário",t:"laca",b:"laca"}, detalhe:{n:"Faixa",t:"laca",b:"verde"} }, ()=>{
+    box(1.94,2.30,0.52, SM("corpo"), 2.30,1.15,12.28);
+    box(1.86,0.03,0.04, SM("detalhe"), 2.30,1.62,12.01);
+    perfil(1.84,2.30,1.06,12.00);
+    col(1.31,12.00,3.29,12.56); }));
+def("cab_suite", FX("Cabeceira da suíte","Suíte",
+  { ripado:{n:"Painel ripado",t:"ripado",b:"ripado"} }, ()=>{
+    boxT(0.06,2.34,1.96, SM("ripado"), 1.16,1.17,11.15, 1.2); }));
+def("gabinete", FX("Gabinete do banheiro","Banheiros",
+  { corpo:{n:"Gabinete",t:"madeira",b:"madeira"}, tampo:{n:"Bancada",t:"pedra",b:"granito"} }, (P)=>{
+    const xg = 5.94, zGab = P.z;
+    box(0.44,0.82,1.00, SM("corpo"), xg,0.41,zGab);
+    box(0.48,0.05,1.04, SM("tampo"), xg,0.86,zGab);
+    perfil(0.96,xg-0.23,0.74,zGab,Math.PI/2);
+    cil(0.17,0.15,0.12, M.branco, xg,0.92,zGab, 18);                // cuba
+    box(0.06,0.12,0.06, M.inox, xg+0.15,1.02,zGab);                 // torneira
+    col(5.70,zGab-0.54,6.18,zGab+0.54); }));
+
+/* ------------------------------ instâncias ------------------------------ */
+/* Cria o móvel, desenha o modelo atual e mede: caixa (para tocar nele),
+   colisores e as partes que o modelo usa. */
+function novoItem(id, key, inst={}){
+  const d = DEFS[key];
+  const it = { id, key, def:d, nome:inst.nome||d.nome, sala:inst.sala||d.sala||"Outros",
+    P:Object.assign({}, d.P, inst.P), v:d.vars[0].id, v0:d.vars[0].id, o:{},
+    x:0, z:0, x0:0, z0:0, rot:inst.rot0||0, rot0:inst.rot0||0, vis:true,
+    flat:!!d.flat, fixo:!!d.fixo, mundo:!!d.mundo, custom:!!inst.custom, tipo:key,
+    cols:[], parts:[], off:[0,0], hw:0.2, hd:0.2, alt:0.3, y0:0, usa:{} };
+  if(inst.pos){ it.x = it.x0 = inst.pos[0]; it.z = it.z0 = inst.pos[1]; }
+  construirItem(it, true);
+  ITEMS.push(it);
+  return it;
+}
+function construirItem(it, primeira){
+  for(const p of it.parts) p.geo.dispose();
+  it.parts = []; it.cols = []; it.usa = {};
+  const antCOL = COL, antITEM = ITEM, tmp = [];
   COL = tmp; ITEM = it;
-  build();
+  const vr = it.def.vars.find(v=>v.id===it.v) || it.def.vars[0];
+  vr.f(it.P);
   COL = antCOL; ITEM = antITEM;
 
   const bb = new THREE.Box3(), mb = new THREE.Box3();
@@ -1070,95 +1668,27 @@ function mover(id, nome, build, opt={}){
     mb.copy(m.geometry.boundingBox).applyMatrix4(m.matrix);
     bb.union(mb);
   }
-  const cx = (bb.min.x+bb.max.x)/2, cz = (bb.min.z+bb.max.z)/2;
-  it.x0 = it.x = cx; it.z0 = it.z = cz;
+  // peça fixa: o pivô é o centro da caixa; peça móvel: o pivô é a origem do desenho
+  const cx = it.mundo ? (bb.min.x+bb.max.x)/2 : 0, cz = it.mundo ? (bb.min.z+bb.max.z)/2 : 0;
+  if(it.mundo){ it.x = cx; it.z = cz; if(primeira){ it.x0 = cx; it.z0 = cz; } }
+  it.off = [(bb.min.x+bb.max.x)/2-cx, (bb.min.z+bb.max.z)/2-cz];
   it.hw = (bb.max.x-bb.min.x)/2; it.hd = (bb.max.z-bb.min.z)/2;
+  it.y0 = it.flat ? 0 : Math.max(0, bb.min.y);
   it.alt = it.flat ? 0.06 : Math.max(bb.max.y, 0.30);
 
   for(const m of tmp){
     const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
-    g.applyMatrix4(m.matrix); g.translate(-cx, 0, -cz);
-    it.parts.push({ geo:g, mat:m.material, ro:m.renderOrder });
+    g.applyMatrix4(m.matrix);
+    if(cx || cz) g.translate(-cx, 0, -cz);
+    const slot = m.material.userData && m.material.userData.slot;
+    if(slot) it.usa[slot] = true;
+    it.parts.push({ geo:g, mat:m.material, slot, ro:m.renderOrder });
     m.geometry.dispose();
   }
-  it.cols = it.cols.map(c => ({ x0:c.x0-cx, z0:c.z0-cz, x1:c.x1-cx, z1:c.z1-cz }));
-  ITEMS.push(it);
-  return it;
+  if(cx || cz) it.cols = it.cols.map(c => ({ x0:c.x0-cx, z0:c.z0-cz, x1:c.x1-cx, z1:c.z1-cz }));
 }
 
-/* Cadeiras: assento e encosto como caixas comuns — a fusão por material já
-   cuida da contagem de draw calls. [x, z, ang] com ang apontando para onde
-   vai o encosto. */
-function seats(list, mat){
-  for(const [x,z,ang] of list){
-    box(0.44,0.06,0.44, mat, x, 0.45, z, ang);
-    box(0.44,0.48,0.06, mat, x+Math.sin(ang)*0.21, 0.72, z+Math.cos(ang)*0.21, ang);
-  }
-}
-
-/* As camas ganham base, colchao, edredom, travesseiro e manta em camadas —
-   sao poucas caixas a mais e e o que tira o aspecto de bloco branco. */
-function bedSingle(cx, cz){                     // cabeceira ao SUL (cz+)
-  box(0.92, 0.26, 1.92, M.madeira, cx, 0.13, cz);                 // base
-  box(0.88, 0.22, 1.88, M.branco,  cx, 0.37, cz);                 // colchao
-  box(0.92, 0.11, 1.34, M.branco,  cx, 0.53, cz-0.24);            // edredom
-  box(0.94, 0.07, 0.46, M.verde,   cx, 0.56, cz-0.62);            // manta no pe
-  box(0.60, 0.15, 0.34, M.branco,  cx, 0.55, cz+0.72);            // travesseiro
-  addBoxCollider(cx-0.48, cz-0.98, cx+0.48, cz+0.98);
-  sombra(cx, cz, 1.5, 2.5);
-}
-function bedDouble(cx, cz){                     // cabeceira a OESTE (cx-)
-  box(2.02, 0.26, 1.62, M.madeira,   cx, 0.13, cz);               // base
-  box(1.96, 0.22, 1.56, M.branco,    cx, 0.37, cz);               // colchao
-  box(1.42, 0.12, 1.60, M.branco,    cx+0.26, 0.54, cz);          // edredom
-  box(0.50, 0.08, 1.60, M.tecidoEsc, cx+0.74, 0.58, cz);          // manta no pe
-  for(const s of [-0.36, 0.36])
-    box(0.36, 0.16, 0.52, M.branco,  cx-0.68, 0.56, cz+s);        // travesseiros
-  addBoxCollider(cx-1.03, cz-0.83, cx+1.03, cz+0.83);
-  sombra(cx, cz, 2.6, 2.2);
-}
-/* criado-mudo: gabinete com tampo, para poder ficar em qualquer lugar do chão */
-function criado(cx, cz, w=0.40, d=0.40){
-  box(w, 0.50, d, M.madeira, cx, 0.25, cz);
-  box(w+0.04, 0.04, d+0.04, M.madeira, cx, 0.52, cz);
-  box(w-0.08, 0.10, 0.02, M.lacaEsc, cx, 0.40, cz-d/2-0.005);     // gaveta
-  addBoxCollider(cx-w/2+0.01, cz-d/2+0.01, cx+w/2-0.01, cz+d/2-0.01);
-}
-/* frente de geladeira: junta do freezer e dois puxadores verticais */
-function geladeira(cx, cz){
-  box(0.74, 1.84, 0.68, M.inox,    cx, 0.92, cz);
-  box(0.76, 0.02, 0.70, M.lacaEsc, cx, 1.28, cz);
-  for(const s of [-0.26, 0.26])
-    box(0.03, 0.56, 0.04, M.lacaEsc, cx+s, 1.55 + (s<0?-0.62:0), cz-0.36);
-  addBoxCollider(cx-0.40, cz-0.38, cx+0.40, cz+0.38);
-  sombra(cx, cz, 1.1, 1.0);
-}
-/* puxador perfil embutido — risco escuro que dá leitura de marcenaria */
-function perfil(w, x, y, z, rot=0){ box(w, 0.018, 0.02, M.lacaEsc, x, y, z, rot); }
-/* Banheiro comprido e estreito, como o das fotos: bancada e vaso encostados
-   na parede leste e o box no fundo — a faixa junto à porta fica livre. */
-function banho(z0, z1, fundo){
-  const xg = 5.94;                                  // eixo da marcenaria (parede leste)
-  const zGab = z0 + 0.58, zVaso = z0 + 1.22;
-  box(0.44, 0.82, 1.00, M.madeira, xg, 0.41, zGab);               // gabinete
-  box(0.48, 0.05, 1.04, M.granito, xg, 0.86, zGab);
-  perfil(0.96, xg-0.23, 0.74, zGab, Math.PI/2);
-  cil(0.17,0.15,0.12, M.branco, xg, 0.92, zGab);                  // cuba
-  box(0.06, 0.12, 0.06, M.inox,    xg+0.15, 1.02, zGab);          // torneira
-  box(0.03, 0.92, 0.86, M.espelho, 6.15, 1.58, zGab);             // espelho
-  box(0.04, 0.03, 0.90, M.inox,    6.12, 1.06, zGab);             // LED sob o espelho
-  addBoxCollider(5.70, zGab-0.54, 6.18, zGab+0.54);
-  // vaso encostado na parede
-  box(0.44, 0.40, 0.38, M.branco, 5.87, 0.20, zVaso);
-  box(0.18, 0.48, 0.40, M.branco, 6.08, 0.44, zVaso);
-  addBoxCollider(5.63, zVaso-0.24, 6.18, zVaso+0.24);
-  // box de vidro no fundo
-  const zg = z1 - fundo;
-  box(1.14, 1.94, 0.02, M.vidro, 5.60, 0.97, zg);
-  box(1.12, 0.03, fundo, M.branco, 5.60, 0.015, z1-fundo/2);      // soleira do box
-  box(0.06, 0.24, 0.06, M.inox,    5.60, 1.92, z1-0.30);          // chuveiro
-}
-
+/* ------------------------------ o apartamento ---------------------------- */
 function buildFixtures(){
 
   /* ===== TERRAÇO GOURMET — churrasqueira, bancada e mesa ===== */
@@ -1167,36 +1697,16 @@ function buildFixtures(){
   box (0.70, 0.46, 0.08, M.lacaEsc, 1.42, 0.92, 0.16);            // boca
   boxT(0.95, 0.85, 0.34, M.tijolo,  1.42, 2.08, 0.32, 0.55);      // coifa
   addBoxCollider(0.93, 0.10, 1.92, 0.76);
-  box (0.78, 0.86, 0.56, M.laca,    0.52, 0.43, 0.46);            // bancada de apoio
-  box (0.82, 0.05, 0.60, M.granito, 0.52, 0.88, 0.46);
-  addBoxCollider(0.11, 0.16, 0.94, 0.77);
-  // mesa redonda + 3 cadeiras
-  mover("mesa_terraco","Mesa do terraço",()=>{
-    cil(0.40,0.40,0.05, M.madeira, 0.70, 0.74, 3.05, 20);
-    box(0.09, 0.72, 0.09, M.lacaEsc, 0.70, 0.37, 3.05);
-    box(0.44, 0.04, 0.44, M.lacaEsc, 0.70, 0.04, 3.05);
-    seats([[0.70,2.44,Math.PI],[0.70,3.66,0],[0.16,3.05,-Math.PI/2]], M.laca);
-    addBoxCollider(0.30, 2.62, 1.14, 3.50);
-    sombra(0.70, 3.05, 1.5, 1.5);
-  });
+  novoItem("bancada_ter","bancada_ter");
+  novoItem("mesa_terraco","mesa_t",{ nome:"Mesa do terraço", sala:"Terraço", pos:[0.70,3.05] });
 
   /* ===== COZINHA — bancada sob a janela, torre em L e geladeira =====
      Os armários aéreos ficam só no trecho sem janela; o resto da parede
      é o janelão que ilumina a cozinha e a sala. */
-  box(3.20, 0.86, 0.60, M.madeira, 3.70, 0.43, 0.45);             // base
-  box(3.24, 0.05, 0.64, M.granito, 3.70, 0.89, 0.45);
-  addBoxCollider(2.10, 0.13, 5.32, 0.78);
-  box(0.62, 0.42, 0.40, M.lacaEsc, 2.55, 0.92, 0.45);             // cooktop
-  box(0.46, 0.02, 0.34, M.inox,    4.30, 0.91, 0.45);             // cuba
-  box(1.08, 0.70, 0.34, M.laca,    2.66, 1.93, 0.31);             // aéreos
-  box(0.74, 0.10, 0.32, M.inox,    2.55, 1.53, 0.30);             // depurador
-  // torre de armários encostada na área de serviço — o "L" da cozinha
-  boxT(1.36, 2.30, 0.40, M.madeira, 2.78, 1.15, 1.92, 1.3);
-  box (1.28, 0.03, 0.04, M.laca,    2.78, 1.62, 1.71);
-  addBoxCollider(2.08, 1.70, 3.48, 2.14);
-  perfil(3.10, 3.70, 0.78, 0.76);                                 // puxador da bancada
-  perfil(1.04, 2.66, 1.60, 0.49);                                 // puxador dos aéreos
-  geladeira(5.76, 0.50);                                          // canto nordeste
+  novoItem("coz_bancada","bancada_coz");
+  novoItem("coz_aereos","aereos_coz");
+  novoItem("coz_torre","torre_coz");
+  novoItem("geladeira","geladeira");
 
   /* ===== ÁREA DE SERVIÇO — tudo na parede oeste, passagem livre ===== */
   box(0.50, 0.88, 0.50, M.laca,   2.33, 0.44, 2.52);              // tanque
@@ -1208,130 +1718,65 @@ function buildFixtures(){
   /* ===== SALA — painel ripado com TV, sofá, tapete e jantar ===== */
   /* o painel fica na FACE SUL da parede da área de serviço (z 3.93),
      voltado para o sofá — e não dentro dela */
-  boxT(1.34, 2.36, 0.06, M.ripado,  2.76, 1.18, 3.97, 1.2);       // painel ripado
-  box (0.98, 0.58, 0.05, M.lacaEsc, 2.76, 1.20, 4.02);            // TV
-  box (1.22, 0.09, 0.32, M.lacaEsc, 2.76, 0.46, 4.13);            // bancada suspensa
-  addBoxCollider(2.08, 3.93, 3.44, 4.32);
-  // sofá encostado na parede sul, de frente para a TV
-  mover("sofa","Sofá",()=>{
-    // o braço esquerdo ficava 8 cm dentro da parede do terraço: recuado para a face dela
-    box(1.70, 0.40, 0.86, M.tecido,    2.98, 0.25, 5.88);
-    box(1.70, 0.48, 0.22, M.tecido,    2.98, 0.62, 6.25);
-    box(0.20, 0.34, 0.86, M.tecidoEsc, 2.18, 0.56, 5.88);
-    box(0.20, 0.34, 0.86, M.tecidoEsc, 3.78, 0.56, 5.88);
-    addBoxCollider(2.08, 5.42, 3.88, 6.36);
-    sombra(2.98, 5.90, 2.4, 1.5);
-  });
+  novoItem("painel_tv","painel_tv");
+  novoItem("sofa","sofa",{ pos:[2.98,5.89] });
   /* o estar tem 1,49 m de largura: o tapete e um apoio no canto bastam.
      Uma mesa de centro no meio fecharia a passagem para a porta do terraco. */
-  mover("tapete","Tapete",()=>{
-    box(1.36, 0.012, 1.30, M.tapete,  2.78, 0.008, 4.95);
-  },{ flat:true });
-  mover("apoio","Apoio lateral",()=>{
-    box(0.44, 0.40, 0.44, M.madeira,  2.28, 0.20, 4.50);
-    addBoxCollider(2.05, 4.27, 2.51, 4.73);
-  });
+  novoItem("tapete","tapete",{ pos:[2.78,4.95] });
+  novoItem("apoio","apoio",{ nome:"Apoio lateral", pos:[2.28,4.50] });
   /* jantar para 6 encostado na face leste, como na planta — assim sobra
      1 m de passagem livre entre a cozinha e o estar */
-  mover("jantar","Mesa de jantar",()=>{
-    box(0.85, 0.05, 1.55, M.madeira, 5.32, 0.74, 3.30);
-    for(const sx of [-0.33, 0.33]) for(const sz of [-0.62, 0.62])
-      box(0.07, 0.72, 0.07, M.lacaEsc, 5.32+sx, 0.37, 3.30+sz);
-    seats([[4.80,2.82,-Math.PI/2],[4.80,3.30,-Math.PI/2],[4.80,3.78,-Math.PI/2],
-           [5.86,2.82, Math.PI/2],[5.86,3.30, Math.PI/2],[5.86,3.78, Math.PI/2]], M.tecido);
-    addBoxCollider(4.58, 2.58, 6.08, 4.02);
-    sombra(5.32, 3.30, 1.9, 2.3);
-  });
-  // aparador sob a janela leste
-  mover("aparador","Aparador da sala",()=>{
-    box(0.38, 0.70, 1.30, M.madeira, 5.97, 0.35, 5.20);
-    addBoxCollider(5.76, 4.55, 6.16, 5.85);
-  });
+  novoItem("jantar","jantar",{ pos:[5.32,3.30] });
+  novoItem("aparador","aparador",{ nome:"Aparador da sala", pos:[5.97,5.20], rot0:1 });
 
   /* ===== DORMITÓRIO — duas camas, painel verde e escrivaninha ===== */
-  boxT(2.06, 2.36, 0.06, M.madeira, 2.30, 1.18, 9.85, 1.3);       // painel da cabeceira
-  box (1.86, 0.34, 0.05, M.verde,   2.30, 1.52, 9.80);            // nicho verde
-  box (1.86, 0.04, 0.22, M.madeira, 2.30, 1.16, 9.72);            // prateleira
-  mover("cama_a","Cama de solteiro (oeste)",()=> bedSingle(1.68, 8.85));
-  mover("cama_b","Cama de solteiro (leste)",()=> bedSingle(3.18, 8.85));
-  mover("criado_dorm","Criado-mudo do quarto",()=> criado(2.43, 9.58, 0.50, 0.40));
-  box(2.44, 2.30, 0.56, M.laca,  2.32, 1.15, 6.86);               // armário ao norte
-  box(2.32, 0.03, 0.04, M.verde, 2.32, 1.62, 6.57);
-  perfil(2.30, 2.32, 1.06, 6.59);
-  addBoxCollider(1.10, 6.56, 3.54, 7.16);
-  mover("escrivaninha","Escrivaninha",()=>{
-    box(1.02, 0.05, 0.50, M.madeira, 1.68, 0.74, 7.62);
-    box(0.06, 0.72, 0.46, M.lacaEsc, 1.20, 0.37, 7.62);
-    box(0.06, 0.72, 0.46, M.lacaEsc, 2.14, 0.37, 7.62);
-    addBoxCollider(1.16, 7.36, 2.20, 7.88);
-  });
+  novoItem("cab_dorm","cab_dorm");
+  novoItem("cama_a","cama_s",{ nome:"Cama de solteiro (oeste)", pos:[1.68,8.85] });
+  novoItem("cama_b","cama_s",{ nome:"Cama de solteiro (leste)", pos:[3.18,8.85] });
+  novoItem("criado_dorm","criado",{ nome:"Criado-mudo do quarto", pos:[2.43,9.58], P:{ w:0.50, d:0.40 } });
+  novoItem("armario_dorm","armario_dorm");
+  novoItem("escrivaninha","escrivaninha",{ pos:[1.68,7.62] });
 
   /* ===== SUÍTE — cama de casal com cabeceira ripada e armário ===== */
-  boxT(0.06, 2.34, 1.96, M.ripado, 1.16, 1.17, 11.15, 1.2);       // cabeceira
-  mover("cama_casal","Cama de casal",()=> bedDouble(2.18, 11.15));
-  box(1.94, 2.30, 0.52, M.laca,  2.30, 1.15, 12.28);              // armário na parede sul
-  box(1.86, 0.03, 0.04, M.verde, 2.30, 1.62, 12.01);
-  perfil(1.84, 2.30, 1.06, 12.00);
-  addBoxCollider(1.31, 12.00, 3.29, 12.56);
-  mover("penteadeira","Penteadeira",()=>{
-    box(0.72, 0.06, 0.40, M.madeira, 3.66, 0.52, 10.28);
-    for(const sx of [-0.32, 0.32]) box(0.04, 0.50, 0.36, M.lacaEsc, 3.66+sx, 0.25, 10.28);
-    addBoxCollider(3.28, 10.06, 4.04, 10.50);
-  });
+  novoItem("cab_suite","cab_suite");
+  novoItem("cama_casal","cama_c",{ nome:"Cama de casal", pos:[2.18,11.15], rot0:3 });
+  novoItem("armario_suite","armario_suite");
+  novoItem("penteadeira","penteadeira",{ pos:[3.66,10.28], rot0:2 });
   box(0.66, 0.90, 0.03, M.espelho, 3.66, 1.36, 10.10);            // espelho na parede
-  /* entre a parede norte e a cama sobram 27 cm; ao sul o armário encosta na cama.
-     Por isso um criado só, estreito, no lado norte */
-  mover("criado_n","Criado-mudo da suíte",()=> criado(1.42, 10.19, 0.40, 0.24));
+  /* entre a parede norte e a cama sobram 27 cm; ao sul o armário encosta na
+     cama. Por isso um criado só, estreito, no lado norte */
+  novoItem("criado_n","criado",{ nome:"Criado-mudo da suíte", sala:"Suíte", pos:[1.42,10.19], rot0:2, P:{ w:0.40, d:0.24 } });
 
   /* ===== BANHEIROS ===== */
-  banho(7.73, 11.40, 1.24);    // social — box maior no fundo
-  banho(11.54, 13.72, 0.72);   // da suíte
+  banho(7.73, 11.40, 1.24, "social");    // social — box maior no fundo
+  banho(11.54, 13.72, 0.72, "suite");    // da suíte
 
   /* ===== HALL DE ENTRADA — aparador na parede dos banheiros, para deixar
      a porta social livre ===== */
-  mover("aparador_hall","Aparador do hall",()=>{
-    box(0.90, 0.78, 0.30, M.madeira, 5.58, 0.39, 7.44);
-    box(0.94, 0.04, 0.34, M.granito, 5.58, 0.80, 7.44);
-    addBoxCollider(5.12, 7.28, 6.04, 7.60);
-  });
+  novoItem("aparador_hall","aparador",{ nome:"Aparador do hall", sala:"Hall", pos:[5.58,7.44],
+    P:{ w:0.90, d:0.30, h:0.78, tampo:true } });
   box(0.78, 1.00, 0.03, M.espelho, 5.58, 1.58, 7.57);             // espelho
 }
+/* Banheiro comprido e estreito, como o das fotos: bancada e vaso encostados
+   na parede leste e o box no fundo — a faixa junto à porta fica livre. */
+function banho(z0, z1, fundo, qual){
+  const zGab = z0 + 0.58, zVaso = z0 + 1.22;
+  novoItem("gab_"+qual,"gabinete",{ nome:"Gabinete do banheiro "+(qual==="suite"?"da suíte":"social"), P:{ z:zGab } });
+  box(0.03, 0.92, 0.86, M.espelho, 6.15, 1.58, zGab);             // espelho
+  box(0.04, 0.03, 0.90, M.inox,    6.12, 1.06, zGab);             // LED sob o espelho
+  // vaso encostado na parede
+  box(0.44, 0.40, 0.38, M.branco, 5.87, 0.20, zVaso);
+  box(0.18, 0.48, 0.40, M.branco, 6.08, 0.44, zVaso);
+  addBoxCollider(5.63, zVaso-0.24, 6.18, zVaso+0.24);
+  // box de vidro no fundo
+  const zg = z1 - fundo;
+  box(1.14, 1.94, 0.02, M.vidro, 5.60, 0.97, zg);
+  box(1.12, 0.03, fundo, M.branco, 5.60, 0.015, z1-fundo/2);      // soleira do box
+  box(0.06, 0.24, 0.06, M.inox,    5.60, 1.92, z1-0.30);          // chuveiro
+}
 
-/* ------------------------------- catálogo -------------------------------
-   Peças que dá para acrescentar. Cada build() desenha em torno de (0,0). */
-const CATALOGO = [
-  { tipo:"poltrona", nome:"Poltrona", build(){
-      box(0.80,0.36,0.80, M.tecido, 0,0.20,0);
-      box(0.80,0.46,0.18, M.tecido, 0,0.60,-0.31);
-      for(const s of [-1,1]) box(0.14,0.28,0.64, M.tecidoEsc, s*0.33,0.50,0.04);
-      for(const sx of [-1,1]) for(const sz of [-1,1]) box(0.05,0.10,0.05, M.lacaEsc, sx*0.34,0.05,sz*0.34);
-      addBoxCollider(-0.40,-0.40,0.40,0.40); sombra(0,0,1.2,1.2); } },
-  { tipo:"mesa_centro", nome:"Mesa de centro", build(){
-      box(1.00,0.04,0.60, M.madeira, 0,0.40,0);
-      for(const sx of [-1,1]) for(const sz of [-1,1]) box(0.04,0.38,0.04, M.lacaEsc, sx*0.46,0.19,sz*0.26);
-      box(0.90,0.02,0.50, M.lacaEsc, 0,0.14,0);
-      addBoxCollider(-0.50,-0.30,0.50,0.30); sombra(0,0,1.3,0.9); } },
-  { tipo:"puff", nome:"Puff", build(){
-      cil(0.26,0.24,0.38, M.tecidoEsc, 0,0.19,0, 20);
-      addBoxCollider(-0.26,-0.26,0.26,0.26); sombra(0,0,0.8,0.8); } },
-  { tipo:"planta", nome:"Planta", build(){
-      cil(0.17,0.13,0.30, M.branco, 0,0.15,0, 16);
-      for(const [x,y,z,r,sy] of [[0,0.78,0,0.30,1.55],[0.14,0.62,0.10,0.20,1.3],[-0.12,0.66,-0.1,0.2,1.4]]){
-        const m = new THREE.Mesh(new THREE.IcosahedronGeometry(r,1), M.folha);
-        m.scale.y = sy; m.position.set(x,y,z); add(m);
-      }
-      addBoxCollider(-0.20,-0.20,0.20,0.20); sombra(0,0,0.8,0.8); } },
-  { tipo:"rack", nome:"Estante baixa", build(){
-      box(1.40,0.46,0.36, M.madeira, 0,0.23,0);
-      box(1.44,0.03,0.38, M.madeira, 0,0.475,0);
-      for(const s of [-0.35,0.35]) box(0.64,0.34,0.02, M.verde, s,0.24,-0.185);
-      addBoxCollider(-0.70,-0.18,0.70,0.18); sombra(0,0,1.8,0.8); } },
-  { tipo:"luminaria", nome:"Luminária de piso", build(){
-      cil(0.14,0.14,0.03, M.lacaEsc, 0,0.015,0, 16);
-      box(0.02,1.50,0.02, M.lacaEsc, 0,0.76,0);
-      cil(0.14,0.22,0.30, M.lampada, 0,1.62,0, 18);
-      addBoxCollider(-0.15,-0.15,0.15,0.15); } },
-];
+/* catálogo: toda peça móvel pode ser acrescentada */
+const CATALOGO = Object.values(DEFS).filter(d => d.cat);
 
 /* ------------------------------- a vista -------------------------------
    O foco é o apartamento. Lá fora sobraram só três coisas: o gradiente de
@@ -1512,7 +1957,7 @@ function setupControls(){
     camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
     if(mode==="aereo" && AER.fit) ajustarAereo();
-    pedir();
+    ajustarVista();
   }, {passive:true});
 
   controlesAereos(el);
@@ -1621,10 +2066,10 @@ function drawMap(){
 }
 
 /* ============================== MÓVEIS ==================================== */
-let SEL = null;                      // móvel selecionado
+let SEL = null;                      // peça selecionada
 let FLOOR = null;                    // ponto tocado no chão (vista de maquete)
 let WP = [];                         // pontos amostrados ao longo das paredes
-let cseq = 0;                        // sequência de ids dos móveis adicionados
+let cseq = 0;                        // sequência de ids das peças adicionadas
 
 function amostrarParedes(){
   WP = [];
@@ -1648,7 +2093,12 @@ function colsMundo(it, x=it.x, z=it.z, rot=it.rot){
     return { x0:x+Math.min(a,d), x1:x+Math.max(a,d), z0:z+Math.min(b,e), z1:z+Math.max(b,e) };
   });
 }
-/* área que o móvel ocupa no chão: os colisores, ou a caixa (tapete) */
+/* centro da caixa da peça no mundo (o pivô nem sempre é o centro) */
+function centroPick(it, x, z, rot){
+  const [ox,oz] = rotXZ(it.off[0], it.off[1], rot);
+  return [x+ox, z+oz];
+}
+/* área que a peça ocupa no chão: os colisores, ou a caixa (tapete, painéis) */
 function pegada(it, x, z, rot){
   if(it.cols.length){
     const cs = colsMundo(it,x,z,rot);
@@ -1656,8 +2106,9 @@ function pegada(it, x, z, rot){
                                z0:Math.min(u.z0,c.z0), z1:Math.max(u.z1,c.z1) }),
                      { x0:1e9, x1:-1e9, z0:1e9, z1:-1e9 });
   }
+  const [cx,cz] = centroPick(it,x,z,rot);
   const hw = rot%2 ? it.hd : it.hw, hd = rot%2 ? it.hw : it.hd;
-  return { x0:x-hw, x1:x+hw, z0:z-hd, z1:z+hd };
+  return { x0:cx-hw, x1:cx+hw, z0:cz-hd, z1:cz+hd };
 }
 const sobrep = (a,b,e) => a.x0+e < b.x1 && a.x1-e > b.x0 && a.z0+e < b.z1 && a.z1-e > b.z0;
 function dentroDeComodo(x,z){
@@ -1665,7 +2116,7 @@ function dentroDeComodo(x,z){
   return false;
 }
 /* Posição válida = tudo dentro dos cômodos, fora das paredes e sem sobrepor
-   marcenaria fixa nem outro móvel (com um respiro de poucos cm). */
+   marcenaria fixa nem outra peça (com um respiro de poucos cm). */
 function valido(it, x, z, rot){
   const f = pegada(it,x,z,rot);
   for(const [px,pz] of [[f.x0,f.z0],[f.x1,f.z0],[f.x0,f.z1],[f.x1,f.z1]])
@@ -1678,7 +2129,8 @@ function valido(it, x, z, rot){
     for(const b of FIX) if(sobrep(c,b,0.08)) return false;
     for(const o of ITEMS){
       if(o===it || !o.vis || o.flat) continue;
-      for(const b of colsMundo(o)) if(sobrep(c,b,0.03)) return false;
+      const tol = o.fixo ? 0.08 : 0.03;
+      for(const b of colsMundo(o)) if(sobrep(c,b,tol)) return false;
     }
   }
   return true;
@@ -1688,22 +2140,23 @@ function refazBoxes(){
   for(const it of ITEMS) if(it.vis && !it.flat) BOXES.push(...colsMundo(it));
 }
 
-/* A camada fundida dos móveis é refeita só quando algo muda (selecionar,
-   soltar, girar, adicionar, remover). O móvel selecionado fica de fora e é
-   desenhado vivo, para o arraste não custar uma fusão por quadro. */
+/* A camada fundida das peças é refeita só quando algo muda (selecionar,
+   soltar, girar, trocar modelo ou cor, adicionar, remover). A peça
+   selecionada fica de fora e é desenhada viva, para o arraste não custar
+   uma fusão por quadro. */
 function reconstruirMoveis(){
   limparGrupo(G.moveis);
   const ent = [];
   for(const it of ITEMS){
     if(!it.vis || it === SEL) continue;
     const m = m4(it);
-    for(const p of it.parts){ const g = p.geo.clone(); g.applyMatrix4(m); ent.push({ geo:g, mat:p.mat, ro:p.ro }); }
+    for(const p of it.parts){ const g = p.geo.clone(); g.applyMatrix4(m); ent.push({ geo:g, mat:matDe(it,p), ro:p.ro }); }
   }
   fundirEntradas(ent, G.moveis);
   refazBoxes(); pedir();
 }
 
-/* contorno do móvel selecionado: caixa translúcida + arestas */
+/* contorno da peça selecionada: caixa translúcida + arestas */
 let OUT = null;
 const COR_OK = 0xE6B07A, COR_RUIM = 0xE5604D;
 function criarContorno(){
@@ -1718,10 +2171,23 @@ function corContorno(ok){
   OUT.userData.fill.material.color.setHex(ok ? COR_OK : COR_RUIM);
   OUT.userData.arest.material.color.setHex(ok ? COR_OK : COR_RUIM);
 }
+function ajustarContorno(it){
+  const w = it.hw*2+0.08, d = it.hd*2+0.08, h = (it.alt-it.y0)+0.06;
+  OUT.userData.fill.scale.set(w,h,d); OUT.userData.arest.scale.set(w,h,d);
+  OUT.position.set(it.off[0], it.y0+h/2-0.02, it.off[1]);
+}
 function criarVivo(it){
   const gr = new THREE.Group();
-  for(const p of it.parts){ const m = new THREE.Mesh(p.geo, p.mat); m.renderOrder = p.ro; m.frustumCulled = false; gr.add(m); }
+  for(const p of it.parts){
+    const m = new THREE.Mesh(p.geo, matDe(it,p));
+    m.renderOrder = p.ro; m.frustumCulled = false; m.userData.parte = p; gr.add(m);
+  }
   it.live = gr;
+}
+function atualizarVivo(it){
+  if(!it.live) return;
+  for(const m of it.live.children) if(m.userData.parte) m.material = matDe(it, m.userData.parte);
+  pedir();
 }
 function posicionarVivo(it){
   it.live.position.set(it.x, 0, it.z); it.live.rotation.y = it.rot*Math.PI/2;
@@ -1731,32 +2197,29 @@ function selecionar(it){
   if(SEL && SEL.live) G.vivo.remove(SEL.live);
   SEL = it;
   if(it){
-    FLOOR = null; $("#acoes").dataset.k = "";
     if(!it.live) criarVivo(it);
     if(!OUT) criarContorno();
-    it.live.add(OUT);
-    const w = it.hw*2+0.08, d = it.hd*2+0.08, h = it.alt+0.06;
-    OUT.userData.fill.scale.set(w,h,d); OUT.userData.arest.scale.set(w,h,d);
-    OUT.position.set(0, h/2-0.02, 0);
-    corContorno(true);
+    it.live.add(OUT); ajustarContorno(it); corContorno(true);
     posicionarVivo(it);
     G.vivo.add(it.live);
   }
   marcarChao(null);
   reconstruirMoveis();
-  atualizarAcoes();
+  if(sheetOpen() && TAB==="item") renderPainel();
+}
+/* acha um respiro (até 40 cm) quando a peça mudou de tamanho ou girou */
+function acharRespiro(it, rot){
+  if(valido(it,it.x,it.z,rot)) return [it.x,it.z];
+  for(const rr of [0.1,0.2,0.3,0.4]) for(let a=0;a<8;a++){
+    const cx = it.x+Math.cos(a*Math.PI/4)*rr, cz = it.z+Math.sin(a*Math.PI/4)*rr;
+    if(valido(it,cx,cz,rot)) return [cx,cz];
+  }
+  return null;
 }
 function girar(dir){
-  if(!SEL) return;
+  if(!SEL || SEL.fixo) return;
   const r = (SEL.rot + dir + 4) % 4;
-  const x = SEL.x, z = SEL.z;
-  let ok = valido(SEL,x,z,r) ? [x,z] : null;
-  if(!ok){                                   // procura um respiro de até 40 cm
-    outer: for(const rr of [0.1,0.2,0.3,0.4]) for(let a=0;a<8;a++){
-      const cx = x+Math.cos(a*Math.PI/4)*rr, cz = z+Math.sin(a*Math.PI/4)*rr;
-      if(valido(SEL,cx,cz,r)){ ok=[cx,cz]; break outer; }
-    }
-  }
+  const ok = acharRespiro(SEL, r);
   if(!ok){ toast("Sem espaço para girar aqui"); return; }
   SEL.rot = r; SEL.x = ok[0]; SEL.z = ok[1];
   posicionarVivo(SEL); refazBoxes(); salvar(); pedir();
@@ -1766,10 +2229,11 @@ function apagarItem(it, quieto){
   if(SEL === it){ if(it.live) G.vivo.remove(it.live); SEL = null; marcarChao(null); }
   ITEMS.splice(i,1);
   for(const p of it.parts) p.geo.dispose();
+  it.live = null;
   if(!quieto){ reconstruirMoveis(); atualizarAcoes(); }
 }
 function removerSel(){
-  if(!SEL) return;
+  if(!SEL || SEL.fixo) return;
   const it = SEL, nome = it.nome;
   if(it.custom){ apagarItem(it); }
   else { it.vis = false; selecionar(null); }
@@ -1777,10 +2241,10 @@ function removerSel(){
   toast(nome+" removido"+(it.custom?"":" · volta pela aba Móveis"));
 }
 function criarItem(tipo, x, z, rot=0){
-  const def = CATALOGO.find(c=>c.tipo===tipo); if(!def) return null;
-  const it = mover("c"+(++cseq), def.nome, ()=>def.build(), { custom:true, tipo });
-  it.x = x; it.z = z; it.rot = rot;
-  return it;
+  const d = DEFS[tipo]; if(!d || !d.cat) return null;
+  const n = ITEMS.filter(i=>i.custom && i.tipo===tipo).length;
+  return novoItem("c"+(++cseq), tipo, { custom:true, sala:"Adicionadas", pos:[x,z], rot0:rot,
+                                         nome:d.nome+(n ? " "+(n+1) : "") });
 }
 function acharLivre(it, x, z){
   for(let r=0; r<=3; r+=0.15){
@@ -1788,7 +2252,7 @@ function acharLivre(it, x, z){
     for(let k=0;k<n;k++){
       const a = k/n*Math.PI*2;
       const cx = Math.round((x+Math.cos(a)*r)*20)/20, cz = Math.round((z+Math.sin(a)*r)*20)/20;
-      if(valido(it,cx,cz,0)) return [cx,cz];
+      if(valido(it,cx,cz,it.rot)) return [cx,cz];
     }
   }
   return null;
@@ -1805,7 +2269,47 @@ function adicionar(tipo){
   toast(it.nome+" adicionado"+(mode==="walk" ? " à sua frente" : " · arraste para posicionar"));
 }
 
-/* ---------------------- ponto tocado no chão (maquete) ------------------- */
+/* ---------------- modelo e cor de cada peça ---------------- */
+function trocarModelo(it, vid){
+  if(!it || it.v === vid || !it.def.vars.some(v=>v.id===vid)) return;
+  const antV = it.v, antX = it.x, antZ = it.z;
+  it.v = vid; construirItem(it);
+  const ok = it.fixo ? [it.x,it.z] : acharRespiro(it, it.rot);
+  if(!ok){
+    it.v = antV; construirItem(it); it.x = antX; it.z = antZ;
+    toast("Esse modelo não cabe aqui — tente outro lugar");
+  } else if(!it.fixo){ it.x = ok[0]; it.z = ok[1]; }
+  if(it.live){ if(it.live.parent) it.live.parent.remove(it.live); it.live = null; }
+  if(SEL === it){
+    criarVivo(it); it.live.add(OUT); ajustarContorno(it); corContorno(true); posicionarVivo(it); G.vivo.add(it.live);
+  }
+  reconstruirMoveis(); salvar(); renderPainel();
+}
+function definirCor(it, slot, opt){
+  if(!it || !it.def.slots[slot]) return;
+  if(!opt) delete it.o[slot]; else it.o[slot] = opt;
+  atualizarVivo(it); reconstruirMoveis(); salvar(); renderPainel();
+}
+function restaurarItem(it){
+  if(!it) return;
+  it.o = {};
+  if(it.v !== it.v0) trocarModelo(it, it.v0);
+  else { atualizarVivo(it); reconstruirMoveis(); salvar(); renderPainel(); }
+  toast(it.nome+" voltou ao padrão");
+}
+function focarItem(it){
+  AER.g.tx = it.x; AER.g.tz = it.z;
+  AER.g.dist = clamp(Math.max(it.hw,it.hd)*5+4, 5, 14); AER.fit = false;
+}
+/* abre o painel de edição da peça; a partir do passeio, sobe para a maquete */
+function editarItem(it){
+  if(!it) return;
+  it.vis = true;
+  const ir = ()=>{ focarItem(it); selecionar(it); TAB = "item"; alternarPainel(true); };
+  if(mode==="walk"){ reconstruirMoveis(); entrarMaquete(false); setTimeout(ir, 750); } else ir();
+}
+
+/* ---------------- ponto tocado no chão (maquete) ---------------- */
 let MARK = null;
 function marcarChao(p){
   FLOOR = p;
@@ -1819,15 +2323,18 @@ function marcarChao(p){
   pedir(); atualizarAcoes();
 }
 
-/* barra de ações (topo): móvel selecionado ou ponto no chão */
+/* barra de ações (topo): peça selecionada ou ponto no chão */
 function atualizarAcoes(){
   const el = $("#acoes");
   let h = "", on = false;
   if(SEL){
     on = true;
-    h = `<b>${SEL.nome}</b><button data-a="rotl" aria-label="Girar à esquerda">↺</button>`+
-        `<button data-a="rotr" aria-label="Girar à direita">↻</button><span class="sep"></span>`+
-        `<button data-a="del" class="bad">Remover</button><button data-a="ok" class="pri">OK</button>`;
+    h = `<b>${SEL.nome}</b>`;
+    if(!SEL.fixo) h += `<button data-a="rotl" aria-label="Girar à esquerda">↺</button>`+
+                       `<button data-a="rotr" aria-label="Girar à direita">↻</button>`;
+    h += `<span class="sep"></span><button data-a="edit">Editar</button>`;
+    if(!SEL.fixo) h += `<button data-a="del" class="bad">Remover</button>`;
+    h += `<button data-a="ok" class="pri">OK</button>`;
   } else if(FLOOR){
     on = true;
     h = `<b>${FLOOR.nome}</b><button data-a="aqui" class="pri">Passear aqui</button>`+
@@ -1840,6 +2347,7 @@ function acaoClick(e){
   const a = b.dataset.a;
   if(a==="rotl") girar(-1);
   else if(a==="rotr") girar(1);
+  else if(a==="edit"){ TAB = "item"; alternarPainel(true); }
   else if(a==="del") removerSel();
   else if(a==="ok") selecionar(null);
   else if(a==="fecha") marcarChao(null);
@@ -1891,6 +2399,7 @@ function ajustarAereo(){
     for(const p of pts){ const v = p.clone().project(cenaCam); m = Math.max(m, Math.abs(v.x), Math.abs(v.y)); }
     d *= m/0.95;
   }
+  if(!isFinite(d)) d = 20;                    // janela sem tamanho ainda (carregando): distância padrão
   AER.dist = AER.g.dist = clamp(d, 6, 40);
   AER.tx = AER.g.tx = cx; AER.tz = AER.g.tz = cz;
 }
@@ -1927,6 +2436,7 @@ function entrarMaquete(imediato){
   } else {
     irAnim(de, para, 0.45, ()=>{ visAereo = true; aplicarModoVisual(); });
   }
+  ajustarVista();
   showHint(touch ? "um dedo gira · dois dedos movem e dão zoom · toque num móvel e arraste"
                  : "arraste para girar · botão direito move · roda dá zoom · arraste os móveis", 8000);
   pedir();
@@ -1938,6 +2448,7 @@ function entrarPasseio(x, z, yaw){
   const de = poseAtual(), para = poseWalk();
   mode = "walk"; setBodyMode();
   irAnim(de, para, 0.55, ()=>{ visAereo = false; aplicarModoVisual(); });
+  ajustarVista();
   if(touch) showHint("arraste o círculo para andar · arraste a tela para olhar", 5000);
   pedir();
 }
@@ -1970,8 +2481,9 @@ function pontoNoPlano(x, y, h=0){
   return r.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0), -h), _v) ? { x:_v.x, z:_v.z } : null;
 }
 function caixaPick(it){
+  const [cx,cz] = centroPick(it, it.x, it.z, it.rot);
   const hw = it.rot%2 ? it.hd : it.hw, hd = it.rot%2 ? it.hw : it.hd;
-  return new THREE.Box3(new THREE.Vector3(it.x-hw,0,it.z-hd), new THREE.Vector3(it.x+hw,it.alt,it.z+hd));
+  return new THREE.Box3(new THREE.Vector3(cx-hw,it.y0,cz-hd), new THREE.Vector3(cx+hw,it.alt,cz+hd));
 }
 function pickItem(x, y){
   const r = raioDe(x,y); let melhor = null, dm = 1e9; const tmp = new THREE.Vector3();
@@ -2011,12 +2523,13 @@ function controlesAereos(cv){
     }
     if(ptrs.size > 2) return;
     const it = e.button===0 ? pickItem(e.clientX, e.clientY) : null;
-    if(it){
+    if(it && !it.fixo){
       const h = Math.max(0.1, it.alt/2), p0 = pontoNoPlano(e.clientX, e.clientY, h);
       gesto = { tipo:"item", it, h, moved:false,
                 off: p0 ? { x:it.x-p0.x, z:it.z-p0.z } : { x:0, z:0 }, ult:[it.x,it.z] };
     } else {
-      gesto = { tipo:(e.button===2||e.button===1||e.shiftKey) ? "pan" : "orbit", moved:false };
+      // peça fixa: um toque seleciona (para editar cor/modelo); arrastar continua girando a câmera
+      gesto = { tipo:(e.button===2||e.button===1||e.shiftKey) ? "pan" : "orbit", moved:false, tap:(it && it.fixo) ? it : null };
     }
   });
 
@@ -2067,6 +2580,8 @@ function controlesAereos(cv){
       if(g.tipo === "item"){
         if(!g.moved){ selecionar(SEL === g.it ? null : g.it); }
         else { refazBoxes(); salvar(); atualizarAcoes(); }
+      } else if(!g.moved && e.type==="pointerup" && g.tap){
+        selecionar(SEL === g.tap ? null : g.tap);
       } else if(!g.moved && e.type==="pointerup"){
         const q = pontoNoPlano(e.clientX, e.clientY, 0);
         const r = q && roomAt(q.x, q.z, 0);
@@ -2122,6 +2637,16 @@ const fecharMenu = closeMenu;
 /* ============================== PAINEL ==================================== */
 let TAB = "est";
 const CATS = ["piso","parede","mad","gran","acc","tec","tap"];
+const ORDEM_SALAS = ["Terraço","Cozinha","Sala","Dormitório","Suíte","Banheiros","Hall","Adicionadas","Outros"];
+
+/* No celular o painel cobre a metade de baixo: desloca a imagem para que o
+   centro da maquete fique na metade de cima, onde a peça selecionada aparece. */
+function ajustarVista(){
+  const desl = (mode==="aereo" && sheetOpen() && innerWidth < 900) ? innerHeight*0.17 : 0;
+  if(desl) camera.setViewOffset(innerWidth, innerHeight, 0, desl, innerWidth, innerHeight);
+  else camera.clearViewOffset();
+  camera.updateProjectionMatrix(); pedir();
+}
 function alternarPainel(forca){
   const s = $("#sheet");
   const on = forca === undefined ? !s.classList.contains("on") : forca;
@@ -2129,7 +2654,47 @@ function alternarPainel(forca){
   document.body.classList.toggle("sheetOn", on);
   $("#btnPers").classList.toggle("on", on);
   if(on){ document.exitPointerLock?.(); closeMenu(); renderPainel(); }
-  pedir();
+  ajustarVista();
+}
+const nomeVar = it => (it.def.vars.find(v=>v.id===it.v) || {}).n || "";
+
+/* aba Item: modelo + cor de cada parte da peça selecionada */
+function htmlItem(){
+  const it = SEL;
+  if(!it) return '<p class="note">Toque numa peça na vista <b>Maquete</b> — ou escolha uma na aba <b>Móveis</b> — para mudar o <b>modelo</b> e a <b>cor</b> de cada parte dela.</p>';
+  let h = `<div class="row"><h4>${it.nome}<em>${it.sala||""}</em></h4></div>`;
+  if(it.def.vars.length > 1){
+    h += `<div class="row"><h4>Modelo<em>${nomeVar(it)}</em></h4><div class="pills">`+
+      it.def.vars.map(v=>`<button class="pill" data-modelo="${v.id}" aria-pressed="${v.id===it.v}">${v.n}</button>`).join("")+
+      `</div></div>`;
+  }
+  for(const [sk,sd] of Object.entries(it.def.slots)){
+    if(!it.usa[sk]) continue;                      // partes que o modelo atual não tem
+    const oid = it.o[sk], pal = PAL[sd.t] || [];
+    const atual = oid ? ((pal.find(o=>o.id===oid)||{}).nome || "") : "Padrão do estilo";
+    h += `<div class="row"><h4>${sd.n}<em>${atual}</em></h4><div class="chips">`+
+      `<button class="chip auto" data-slot="${sk}" data-opt="" title="Padrão do estilo" aria-label="${sd.n}: padrão do estilo" aria-pressed="${!oid}">A</button>`+
+      pal.map(o=>`<button class="chip" data-slot="${sk}" data-opt="${o.id}" title="${o.nome}" aria-label="${sd.n}: ${o.nome}" aria-pressed="${o.id===oid}" style="background:${o.sw}"></button>`).join("")+
+      `</div></div>`;
+  }
+  h += `<button class="ghost" data-resetitem="1" style="width:100%;margin-bottom:10px">Restaurar esta peça</button>`;
+  return h;
+}
+function htmlMoveis(){
+  const grupos = {};
+  for(const it of ITEMS) (grupos[it.sala] = grupos[it.sala] || []).push(it);
+  let h = '<p class="note">Toque em <b>Editar</b> para mudar modelo e cor de qualquer peça. Na vista <b>Maquete</b>, arraste os móveis para mudar de lugar.</p>';
+  for(const s of ORDEM_SALAS){
+    if(!grupos[s]) continue;
+    h += `<h4 class="grp">${s}</h4><div class="lst">`+
+      grupos[s].map(it=>`<div class="it${it.vis?"":" off"}"><b>${it.nome}</b>`+
+        `<button data-edit="${it.id}">Editar</button>`+
+        (it.fixo ? "" : `<button data-vis="${it.id}">${it.vis?"Ocultar":"Mostrar"}</button>`)+
+        `</div>`).join("")+`</div>`;
+  }
+  h += '<div class="row"><h4>Adicionar peça</h4><div class="addgrid">'+
+    CATALOGO.map(c=>`<button data-add="${c.key}">${c.nome}</button>`).join("")+'</div></div>';
+  return h;
 }
 function renderPainel(){
   const body = $("#sbody"), top = body.scrollTop;
@@ -2142,54 +2707,55 @@ function renderPainel(){
       return `<button class="card" data-est="${e.id}" aria-pressed="${on}"><div class="sw">`+
              sw.map(c=>`<i style="background:${c}"></i>`).join("")+
              `</div><b>${e.nome}</b><span>${e.desc}</span></button>`;
-    }).join("") + '</div><p class="note">Um toque troca piso, paredes, marcenaria, cores e luz de uma vez. Depois ajuste cada item em Acabamentos.</p>';
+    }).join("") + '</div><p class="note">Um toque troca piso, paredes, marcenaria, cores e luz de uma vez. As peças em que você escolheu uma cor própria mantêm essa cor.</p>';
   } else if(TAB === "acab"){
     h = CATS.map(c=>{
       const atual = opc(c, A[c]);
       return `<div class="row"><h4>${ROTULOS[c]}<em>${atual.nome}</em></h4><div class="chips">`+
         OPC[c].map(o=>`<button class="chip" data-cat="${c}" data-id="${o.id}" title="${o.nome}" aria-label="${ROTULOS[c]}: ${o.nome}" aria-pressed="${o.id===A[c]}" style="background:${o.sw}"></button>`).join("")+
         `</div></div>`;
-    }).join("");
+    }).join("") + '<p class="note">Estes acabamentos valem para o apartamento todo. Para mudar só uma peça, use a aba Item.</p>';
+  } else if(TAB === "item"){
+    h = htmlItem();
   } else if(TAB === "mov"){
-    h = '<p class="note">Na vista <b>Maquete</b>, toque num móvel e arraste para mudar de lugar. Aqui você mostra, esconde e acrescenta peças.</p><div class="lst">'+
-      ITEMS.map(it=>`<div class="it${it.vis?"":" off"}"><b>${it.nome}</b>`+
-        (it.vis ? `<button data-loc="${it.id}" aria-label="Localizar ${it.nome}">Ver</button>` : "")+
-        `<button data-vis="${it.id}">${it.vis?"Ocultar":"Mostrar"}</button></div>`).join("")+
-      '</div><div class="row"><h4>Adicionar peça</h4><div class="addgrid">'+
-      CATALOGO.map(c=>`<button data-add="${c.tipo}">${c.nome}</button>`).join("")+'</div></div>';
+    h = htmlMoveis();
   } else {
     h = '<div class="cards">' + Object.entries(LUZ).map(([id,l])=>
       `<button class="card" data-luz="${id}" aria-pressed="${A.luz===id}"><div class="sw"><i style="background:${l.sw}"></i></div><b>${l.nome}</b></button>`
     ).join("") + '</div><p class="note">A luz muda o céu, o reflexo nos materiais e o brilho das sancas.</p>';
   }
-  body.innerHTML = h; body.scrollTop = top;
+  body.innerHTML = h; body.scrollTop = (TAB==="item" && !SEL) ? 0 : top;
   for(const b of document.querySelectorAll("#tabs [data-t]")) b.classList.toggle("on", b.dataset.t === TAB);
 }
 function painelClick(e){
   const b = e.target.closest("button"); if(!b) return;
-  if(b.dataset.est){
-    const es = ESTILOS.find(x=>x.id===b.dataset.est); aplicarAcabs(es.a);
-  } else if(b.dataset.cat){
-    aplicarAcab(b.dataset.cat, b.dataset.id); pedir(); salvar(); renderPainel();
-  } else if(b.dataset.luz){
-    aplicarLuz(b.dataset.luz); pedir(); salvar(); renderPainel();
-  } else if(b.dataset.add){
-    adicionar(b.dataset.add);
-  } else if(b.dataset.vis){
-    const it = ITEMS.find(i=>i.id===b.dataset.vis); if(!it) return;
+  const d = b.dataset;
+  if(d.est){
+    aplicarAcabs(ESTILOS.find(x=>x.id===d.est).a);
+  } else if(d.cat){
+    aplicarAcab(d.cat, d.id); pedir(); salvar(); renderPainel();
+  } else if(d.luz){
+    aplicarLuz(d.luz); pedir(); salvar(); renderPainel();
+  } else if(d.add){
+    adicionar(d.add);
+  } else if(d.vis){
+    const it = ITEMS.find(i=>i.id===d.vis); if(!it) return;
     it.vis = !it.vis; if(!it.vis && SEL===it) selecionar(null);
     reconstruirMoveis(); salvar(); renderPainel();
-  } else if(b.dataset.loc){
-    const it = ITEMS.find(i=>i.id===b.dataset.loc); if(!it) return;
-    const ir = ()=>{ AER.g.tx = it.x; AER.g.tz = it.z; AER.g.dist = 8; AER.fit = false; selecionar(it); };
-    if(COARSE) alternarPainel(false);
-    if(mode==="walk"){ entrarMaquete(false); setTimeout(ir, 700); } else ir();
+  } else if(d.edit){
+    editarItem(ITEMS.find(i=>i.id===d.edit));
+  } else if(d.modelo){
+    trocarModelo(SEL, d.modelo);
+  } else if(d.slot !== undefined){
+    definirCor(SEL, d.slot, d.opt);
+  } else if(d.resetitem){
+    restaurarItem(SEL);
   }
 }
 function aplicarAcabs(a){
   for(const c of CATS) if(a[c]) aplicarAcab(c, a[c]);
   if(a.luz) aplicarLuz(a.luz);
-  pedir(); salvar(); renderPainel();
+  reconstruirMoveis(); salvar(); renderPainel();
 }
 
 /* ============================ ESTADO E LINK =============================== */
@@ -2198,11 +2764,29 @@ function estadoAtual(){
   const m = {};
   for(const it of ITEMS){
     if(it.custom) continue;
-    if(Math.abs(it.x-it.x0) > 0.004 || Math.abs(it.z-it.z0) > 0.004 || it.rot || !it.vis)
-      m[it.id] = [+it.x.toFixed(2), +it.z.toFixed(2), it.rot, it.vis?1:0];
+    const movida = !it.fixo && (Math.abs(it.x-it.x0) > 0.004 || Math.abs(it.z-it.z0) > 0.004 || it.rot !== it.rot0 || !it.vis);
+    const temO = Object.keys(it.o).length > 0;
+    if(movida || temO || it.v !== it.v0)
+      m[it.id] = [+it.x.toFixed(2), +it.z.toFixed(2), it.rot, it.vis?1:0, it.v, temO ? { ...it.o } : 0];
   }
-  const c = ITEMS.filter(i=>i.custom).map(i=>[i.tipo, +i.x.toFixed(2), +i.z.toFixed(2), i.rot, i.vis?1:0]);
-  return { a:{ ...A }, m, c };
+  const c = ITEMS.filter(i=>i.custom).map(i=>[i.tipo, +i.x.toFixed(2), +i.z.toFixed(2), i.rot, i.vis?1:0, i.v,
+                                              Object.keys(i.o).length ? { ...i.o } : 0]);
+  return { ver:2, a:{ ...A }, m, c };
+}
+/* só aceita cores que existem para aquela parte */
+function limparCores(it, o){
+  const r = {};
+  if(o && typeof o === "object")
+    for(const [k,v] of Object.entries(o)){
+      const sd = it.def.slots[k];
+      if(sd && PAL[sd.t] && PAL[sd.t].some(x=>x.id===v)) r[k] = v;
+    }
+  return r;
+}
+function usarModelo(it, vid){
+  if(typeof vid === "string" && vid !== it.v && it.def.vars.some(w=>w.id===vid)){
+    it.v = vid; construirItem(it); it.live = null;
+  }
 }
 function aplicarEstado(s){
   if(!s || typeof s !== "object") return;
@@ -2211,23 +2795,34 @@ function aplicarEstado(s){
   aplicarLuz(typeof a.luz === "string" ? a.luz : "dia");
   if(SEL){ if(SEL.live) G.vivo.remove(SEL.live); SEL = null; }
   for(const it of ITEMS.slice()){
-    if(it.custom) apagarItem(it, true);
-    else { it.x = it.x0; it.z = it.z0; it.rot = 0; it.vis = true; }
+    if(it.custom){ apagarItem(it, true); continue; }
+    if(!it.fixo){ it.x = it.x0; it.z = it.z0; }
+    it.rot = it.rot0; it.vis = true; it.o = {}; it.live = null;
+    if(it.v !== it.v0){ it.v = it.v0; construirItem(it); if(it.fixo){ it.x0 = it.x; it.z0 = it.z; } }
   }
-  const num = v => Number.isFinite(+v) ? +v : 0;
-  for(const [id,v] of Object.entries(s.m || {})){
-    const it = ITEMS.find(i=>i.id===id);
-    if(it && Array.isArray(v)){ it.x = num(v[0]); it.z = num(v[1]); it.rot = (num(v[2])|0)&3; it.vis = v[3] !== 0; }
-  }
-  for(const v of (Array.isArray(s.c) ? s.c.slice(0,40) : [])){
-    if(!Array.isArray(v)) continue;
-    const it = criarItem(String(v[0]), num(v[1]), num(v[2]), (num(v[3])|0)&3);
-    if(it) it.vis = v[4] !== 0;
+  // posições de versões anteriores (pivô diferente) não valem; só os acabamentos
+  if(s.ver === 2){
+    const num = v => Number.isFinite(+v) ? +v : 0;
+    for(const [id,v] of Object.entries(s.m || {})){
+      const it = ITEMS.find(i=>i.id===id);
+      if(!it || !Array.isArray(v)) continue;
+      if(!it.fixo){ it.x = num(v[0]); it.z = num(v[1]); it.rot = (num(v[2])|0)&3; it.vis = v[3] !== 0; }
+      usarModelo(it, v[4]);
+      it.o = limparCores(it, v[5]);
+    }
+    for(const v of (Array.isArray(s.c) ? s.c.slice(0,40) : [])){
+      if(!Array.isArray(v)) continue;
+      const it = criarItem(String(v[0]), num(v[1]), num(v[2]), (num(v[3])|0)&3);
+      if(!it) continue;
+      it.vis = v[4] !== 0; usarModelo(it, v[5]); it.o = limparCores(it, v[6]);
+    }
   }
   // link adulterado ou antigo: o que não cabe volta ao lugar de origem (ou some)
   for(const it of ITEMS.slice()){
-    if(!it.vis || valido(it, it.x, it.z, it.rot)) continue;
-    if(it.custom) apagarItem(it, true); else { it.x = it.x0; it.z = it.z0; it.rot = 0; }
+    if(it.fixo || !it.vis || valido(it, it.x, it.z, it.rot)) continue;
+    if(it.custom){ apagarItem(it, true); continue; }
+    it.x = it.x0; it.z = it.z0; it.rot = it.rot0;
+    if(!valido(it, it.x, it.z, it.rot) && it.v !== it.v0){ it.v = it.v0; construirItem(it); }
   }
   reconstruirMoveis(); renderPainel();
 }
@@ -2265,7 +2860,7 @@ function restaurar(){
     return;
   }
   clearTimeout(resetT); resetT = 0; b.textContent = "Restaurar original";
-  aplicarEstado({ a:ESTILOS[0].a }); salvar(); pedir(); toast("Apartamento original restaurado");
+  aplicarEstado({ ver:2, a:ESTILOS[0].a }); salvar(); pedir(); toast("Apartamento original restaurado");
 }
 
 /* --------------------------------- loop --------------------------------- */
